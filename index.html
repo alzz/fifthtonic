@@ -3,6 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+try { var t = localStorage.getItem('fifthtonic-theme');
+      if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20140%20140%22%3E%3Ccircle%20cx%3D%2270%22%20cy%3D%2270%22%20r%3D%2264%22%20fill%3D%22none%22%20stroke%3D%22%232b9b84%22%20stroke-width%3D%225%22%20opacity%3D%22.5%22%2F%3E%3Ccircle%20cx%3D%2270%22%20cy%3D%226%22%20r%3D%229%22%20fill%3D%22%232b9b84%22%2F%3E%3Cg%20transform%3D%22translate%2870%2C70%29%20scale%28.74%29%20translate%28-60%2C-60%29%22%3E%3Cpath%20d%3D%22M37.8%2C40%20L44%2C98%20Q45%2C104%2051%2C104%20L69%2C104%20Q75%2C104%2076%2C98%20L82.2%2C40%20Z%22%20fill%3D%22%232b9b84%22%20opacity%3D%22.25%22%2F%3E%3Cpath%20d%3D%22M36%2C22%20L44%2C98%20Q45%2C104%2051%2C104%20L69%2C104%20Q75%2C104%2076%2C98%20L84%2C22%22%20fill%3D%22none%22%20stroke%3D%22%232b9b84%22%20stroke-width%3D%228%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%2F%3E%3Cpath%20d%3D%22M32%2C22%20L88%2C22%22%20stroke%3D%22%232b9b84%22%20stroke-width%3D%228%22%20stroke-linecap%3D%22round%22%2F%3E%3Cpath%20d%3D%22M63%2C80%20L84%2C18%22%20stroke%3D%22%232b9b84%22%20stroke-width%3D%228%22%20stroke-linecap%3D%22round%22%20fill%3D%22none%22%2F%3E%3Cellipse%20cx%3D%2255%22%20cy%3D%2284%22%20rx%3D%2211%22%20ry%3D%229%22%20fill%3D%22%232b9b84%22%20transform%3D%22rotate%28-20%2055%2084%29%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E">
 <title>Fifthtonic — find the key of a chord progression</title>
 <style>
 :root {
@@ -15,8 +20,9 @@
   --bad:     #a32b1c;
   --radius:  6px;
 }
+/* System preference applies unless the reader has explicitly chosen light. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg:      #16171a;
     --fg:      #e9e9e4;
     --muted:   #9a9a93;
@@ -25,6 +31,16 @@
     --accent:  #63c9b0;
     --bad:     #e8836f;
   }
+}
+/* An explicit choice wins in both directions. */
+:root[data-theme="dark"] {
+    --bg:      #16171a;
+    --fg:      #e9e9e4;
+    --muted:   #9a9a93;
+    --hairline:#2e3034;
+    --field:   #1e2024;
+    --accent:  #63c9b0;
+    --bad:     #e8836f;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -43,13 +59,50 @@ main {
 @media (max-width: 480px) { main { padding-top: 2.5rem; } }
 
 /* ---- header: deliberately small. The input is the point, not the branding. */
+.brand { display: flex; align-items: center; gap: .75rem; margin: 0 0 1.75rem; }
+
+/* ---- theme toggle: the only control in the header, so it stays icon-sized */
+.theme {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.theme:hover { color: var(--fg); border-color: var(--fg); }
+/* The filled half swaps sides with the theme, so the control shows its state
+   without needing a second icon. */
+.theme svg { transition: transform .2s ease; }
+.theme.is-dark svg { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .theme svg { transition: none; } }
+.theme:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 h1 {
   font-size: 1.05rem;
   font-weight: 600;
   letter-spacing: .02em;
-  margin: 0 0 .15rem;
+  margin: 0 0 .1rem;
 }
-.tagline { color: var(--muted); font-size: .9rem; margin: 0 0 1.75rem; }
+.tagline { color: var(--muted); font-size: .9rem; margin: 0; }
+
+/* ---- logo: the twelve keys as a ring, the tonic picked out, a glass inside.
+   Drawn entirely from the theme tokens so it follows light and dark, and so the
+   page keeps to one accent colour. */
+.logo { width: 46px; height: 46px; flex: none; }
+.logo .ring   { fill: none; stroke: var(--fg); stroke-width: 4; opacity: .35; }
+.logo .dot    { fill: var(--fg); opacity: .35; }
+.logo .tonic  { fill: var(--accent); }
+.logo .liquid { fill: var(--accent); opacity: .22; }
+.logo .glass  { fill: none; stroke: var(--fg); stroke-width: 7; stroke-linejoin: round; stroke-linecap: round; }
+.logo .straw  { fill: none; stroke: var(--accent); stroke-width: 7; stroke-linecap: round; }
+.logo .head   { fill: var(--accent); }
 
 /* ---- input */
 #chords {
@@ -252,8 +305,37 @@ ul.legend b { color: var(--fg); font-weight: 600; }
 </head>
 <body>
 <main>
-  <h1>Fifthtonic</h1>
-  <p class="tagline">Type a chord progression. Find the key.</p>
+  <header class="brand">
+    <svg class="logo" viewBox="0 0 140 140" aria-hidden="true">
+      <circle class="ring" cx="70" cy="70" r="64"/>
+      <g class="dot">
+        <circle cx="102" cy="14.6" r="5"/>
+        <circle cx="125.4" cy="38" r="5"/>
+        <circle cx="134" cy="70" r="5"/>
+        <circle cx="125.4" cy="102" r="5"/>
+        <circle cx="102" cy="125.4" r="5"/>
+        <circle cx="70" cy="134" r="5"/>
+        <circle cx="38" cy="125.4" r="5"/>
+        <circle cx="14.6" cy="102" r="5"/>
+        <circle cx="6" cy="70" r="5"/>
+        <circle cx="14.6" cy="38" r="5"/>
+        <circle cx="38" cy="14.6" r="5"/>
+      </g>
+      <circle class="tonic" cx="70" cy="6" r="7"/>
+      <g transform="translate(70,70) scale(0.72) translate(-60,-60)">
+        <path class="liquid" d="M37.8,40 L44,98 Q45,104 51,104 L69,104 Q75,104 76,98 L82.2,40 Z"/>
+        <path class="glass" d="M36,22 L44,98 Q45,104 51,104 L69,104 Q75,104 76,98 L84,22"/>
+        <path class="glass" d="M32,22 L88,22"/>
+        <path class="straw" d="M63,80 L84,18"/>
+        <ellipse class="head" cx="55" cy="84" rx="10" ry="8" transform="rotate(-20 55 84)"/>
+      </g>
+    </svg>
+    <div>
+      <h1>Fifthtonic</h1>
+      <p class="tagline">Type a chord progression. Find the key.</p>
+    </div>
+    <button id="theme" class="theme" type="button"></button>
+  </header>
 
   <input id="chords" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
          placeholder="C G Am F"
@@ -1256,6 +1338,45 @@ if (typeof module !== 'undefined' && module.exports) {
 
   /* Picking an alternative key re-reads the whole page against it; changing the
      chords or the capo hands the choice back to the analysis. */
+  /* Theme: no stored choice means follow the system. Once the reader picks, the
+     choice sticks and overrides the system in both directions. */
+  const THEME_KEY = 'fifthtonic-theme';
+  const themeBtn = $('theme');
+  /* A ring, one half hollow and one half filled. */
+  const ICON =
+    '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">' +
+      '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/>' +
+      '<path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/>' +
+    '</svg>';
+
+  function activeTheme() {
+    return document.documentElement.getAttribute('data-theme') ||
+           (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  }
+
+  function paintThemeButton() {
+    const now = activeTheme();
+    const next = now === 'dark' ? 'light' : 'dark';
+    if (!themeBtn.firstChild) themeBtn.innerHTML = ICON;
+    themeBtn.classList.toggle('is-dark', now === 'dark');
+    themeBtn.setAttribute('aria-label', 'Switch to ' + next + ' mode');
+    themeBtn.title = 'Switch to ' + next + ' mode';
+  }
+
+  themeBtn.addEventListener('click', () => {
+    const next = activeTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+    paintThemeButton();
+  });
+
+  /* While still on the system default, follow it if the system flips. */
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (!document.documentElement.getAttribute('data-theme')) paintThemeButton();
+  });
+
+  paintThemeButton();
+
   let chosen = null, latest = null;
 
   out.addEventListener('click', (e) => {
