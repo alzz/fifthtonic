@@ -1,0 +1,1290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fifthtonic — find the key of a chord progression</title>
+<style>
+:root {
+  --bg:      #fbfbfa;
+  --fg:      #1a1a18;
+  --muted:   #74746e;
+  --hairline:#e0e0da;
+  --field:   #ffffff;
+  --accent:  #12695a;
+  --bad:     #a32b1c;
+  --radius:  6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:      #16171a;
+    --fg:      #e9e9e4;
+    --muted:   #9a9a93;
+    --hairline:#2e3034;
+    --field:   #1e2024;
+    --accent:  #63c9b0;
+    --bad:     #e8836f;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+}
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 4rem 1.25rem 6rem;
+}
+@media (max-width: 480px) { main { padding-top: 2.5rem; } }
+
+/* ---- header: deliberately small. The input is the point, not the branding. */
+h1 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  margin: 0 0 .15rem;
+}
+.tagline { color: var(--muted); font-size: .9rem; margin: 0 0 1.75rem; }
+
+/* ---- input */
+#chords {
+  width: 100%;
+  padding: .85rem 1rem;
+  font: 500 1.35rem/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--fg);
+  background: var(--field);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+#chords::placeholder { color: var(--muted); font-weight: 400; }
+#chords:focus-visible, #capo:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem;
+  margin-top: .7rem;
+}
+
+/* ---- capo */
+.capo { display: flex; align-items: center; gap: .45rem; font-size: .85rem; color: var(--muted); }
+#capo {
+  width: 3.6rem;
+  padding: .3rem .45rem;
+  font: 500 .95rem/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--fg);
+  background: var(--field);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+/* ---- parsed chord chips */
+.chips-label { font-size: .78rem; color: var(--muted); margin: 1.1rem 0 -.35rem; }
+.chip {
+  font: .8rem/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--muted);
+  padding: .3rem .5rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+.chip b { color: var(--fg); font-weight: 600; }
+.chip .to { color: var(--muted); }
+.chip .sounds { color: var(--accent); font-weight: 600; }
+.chip.bad { color: var(--bad); border-color: var(--bad); }
+.parse-error { color: var(--bad); font-size: .85rem; margin: .5rem 0 0; }
+
+/* ---- result: the one thing that dominates the page */
+#result { margin-top: 3rem; }
+#result:empty { margin-top: 0; }
+.answer { animation: rise .18s ease-out; }
+@keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .answer { animation: none; } }
+
+.keyname {
+  font-size: clamp(2.3rem, 11vw, 3.4rem);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -.02em;
+  color: var(--accent);
+  margin: 0;
+}
+.relative { color: var(--muted); font-size: .9rem; margin: .35rem 0 0; }
+
+.conf { margin-top: 1.5rem; }
+.bar { height: 3px; background: var(--hairline); border-radius: 2px; overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--accent); }
+.conf-text { font-size: .85rem; color: var(--muted); margin-top: .45rem; }
+.conf-text b { color: var(--fg); font-weight: 600; }
+
+.why { margin: 1.25rem 0 0; }
+.ambiguous { color: var(--bad); }
+
+/* ---- supporting detail, always visible */
+.details { margin-top: 2.25rem; border-top: 1px solid var(--hairline); }
+.details h2 {
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--muted);
+  font-weight: 600;
+  margin: 1.75rem 0 .6rem;
+}
+.alts-label { font-size: .78rem; color: var(--muted); margin: 1.6rem 0 .5rem; }
+.alts { display: flex; gap: .4rem; list-style: none; padding: 0; margin: 0; }
+.alts li { flex: 1; min-width: 0; }
+.alts button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .1rem;
+  width: 100%;
+  padding: .4rem .3rem;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.alts button:hover { border-color: var(--fg); }
+.alts button:hover .nm, .alts button:focus-visible .nm { color: var(--accent); }
+.alts button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.alts .nm {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .95rem;
+  font-weight: 600;
+}
+.alts .pct { font-size: .74rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.alts .tag { font-size: .66rem; color: var(--muted); }
+.alts .pct { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ---- the key's own chord palette */
+.grades {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));
+  gap: .4rem;
+}
+.dc {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: .45rem .55rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.dc .num { display: block; font-size: .72rem; color: var(--muted); }
+.dc .nm  { display: block; font-size: .98rem; font-weight: 600; margin-top: .1rem; }
+.dc.extra { border-style: dashed; }
+
+/* ---- circle of fifths */
+.cof { display: block; width: 100%; max-width: 340px; height: auto; margin: .4rem auto 0; }
+.cof .ring, .cof .spoke { fill: none; stroke: var(--hairline); stroke-width: 1; }
+.cof text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  fill: var(--muted);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.cof .maj { font-size: 15px; }
+.cof .min { font-size: 11px; }
+.cof .in  { fill: var(--fg); }
+/* The shaded arc is the key's whole chord supply. */
+.cof .region { fill: var(--accent); opacity: .13; stroke: none; }
+/* The parallel key's chords: outlined, not filled — available to borrow from,
+   but not part of the key you are in. */
+.cof .region-outline {
+  fill: none;
+  stroke: var(--fg);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  opacity: .45;
+}
+.cof .alt { font-size: .78em; opacity: .7; }
+.cof .deg { font-size: 9.5px; fill: var(--accent); }
+/* Parallel-key degrees sit back, matching the dashed outline they belong to. */
+.cof .deg.par { fill: var(--fg); opacity: .5; }
+.cof .on  { fill: var(--accent); font-weight: 700; }
+/* The ring around the tonic carries the same information as the colour, so the
+   highlight survives a monochrome print or a colour-blind reader. */
+.cof .mark { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+/* The parallel key is a landmark, not part of the answer — a plain outline,
+   no accent, so it never competes with the tonic. */
+.cof .mark.parallel { stroke: var(--fg); stroke-width: 1; opacity: .5; }
+
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+th, td { text-align: left; padding: .4rem .75rem .4rem 0; border-bottom: 1px solid var(--hairline); white-space: nowrap; }
+th { font-size: .78rem; font-weight: 600; color: var(--muted); }
+td.sym, td.rn, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+td.out { color: var(--muted); }
+tr.tonic td.sym { color: var(--accent); font-weight: 700; }
+
+/* ---- modes ordered by brightness */
+.bright {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem;
+  list-style: none;
+  padding: 0;
+  margin: .5rem 0 0;
+}
+.bright li {
+  font: .78rem/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  padding: .3rem .45rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+.bright li.own { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.legend { font-size: .85rem; color: var(--muted); margin: .6rem 0 0; }
+ul.legend { list-style: none; padding: 0; }
+ul.legend li { position: relative; padding-left: .95rem; margin-top: .3rem; }
+ul.legend li::before { content: "—"; position: absolute; left: 0; opacity: .6; }
+ul.legend b { color: var(--fg); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Fifthtonic</h1>
+  <p class="tagline">Type a chord progression. Find the key.</p>
+
+  <input id="chords" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+         placeholder="C G Am F"
+         aria-label="Chord progression, separated by spaces or commas">
+
+  <div class="row">
+    <label class="capo" for="capo">Capo
+      <input id="capo" type="number" min="0" max="11" step="1" value="0"
+             inputmode="numeric" autocomplete="off">
+      fret
+    </label>
+  </div>
+
+  <p class="chips-label" id="chips-label" hidden></p>
+  <div class="row" id="chips"></div>
+  <p class="parse-error" id="parse-error" hidden></p>
+
+  <div id="result" aria-live="polite"></div>
+</main>
+
+<script id="theory">
+/* =========================================================================
+   THEORY MODULE — pure. No DOM access anywhere below this line.
+   ========================================================================= */
+
+const PC = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
+const LETTERS = ['C','D','E','F','G','A','B'];
+
+const SHARP_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const FLAT_NAMES  = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+
+/* Key spellings. Conventional choices: F# major (not Gb), Eb minor over D# minor. */
+const MAJOR_KEY_NAMES = ['C','Db','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
+const MINOR_KEY_NAMES = ['C','C#','D','Eb','E','F','F#','G','G#','A','Bb','B'];
+
+const MAJOR_SCALE = [0,2,4,5,7,9,11];
+const NAT_MINOR   = [0,2,3,5,7,8,10];
+/* A minor key is scored against the UNION of natural, harmonic and melodic minor.
+   Treating them as three separate keys would triple-count the same tonic; a real
+   piece in A minor moves freely between G and G#, F and F#. */
+const MINOR_UNION = [0,2,3,5,7,8,9,10,11];
+
+const MAJOR_TRIAD_DEGREES = [0,2,4,5,7,9];      // secondary-dominant targets
+const MINOR_TRIAD_DEGREES = [0,3,5,7,8,10];
+
+function mod12(n) { return ((n % 12) + 12) % 12; }
+
+/* ---- chord parsing --------------------------------------------------- */
+
+function parseRoot(str) {
+  const m = str.match(/^[A-Ga-g]/);
+  if (!m) return null;
+  const letter = m[0].toUpperCase();
+  let len = 1;
+  let pc = PC[letter], name = letter;
+  const acc = str.slice(len).match(/^(##|bb|x|[#b♯♭])/);
+  if (acc) {
+    const a = acc[0];
+    if (a === '##' || a === 'x') { pc += 2; name += '##'; }
+    else if (a === 'bb')         { pc -= 2; name += 'bb'; }
+    else if (a === '#' || a === '♯') { pc += 1; name += '#'; }
+    else                         { pc -= 1; name += 'b'; }
+    len += a.length;
+  }
+  return { pc: mod12(pc), name, letter, len };
+}
+
+/* Returns intervals above the root, or null if the suffix is not understood. */
+function parseSuffix(s) {
+  let i = 0;
+  const eat = (re) => { const m = s.slice(i).match(re); if (m) { i += m[0].length; return m[0]; } return null; };
+
+  let third = 4, fifth = 7, seventh = null, sus = 0;
+  let sixth = false, power = false, ext = 0, quality = 'major';
+  const adds = [];
+
+  /* --- triad. The (?!aj) guard on bare `m` stops maj7 being read as a minor
+     chord followed by garbage. */
+  if (eat(/^(dim|°)/))                 { quality = 'dim';   third = 3; fifth = 6; }
+  else if (eat(/^(aug|\+)/))           { quality = 'aug';   fifth = 8; }
+  else if (eat(/^sus2/))               { quality = 'sus';   sus = 2; }
+  else if (eat(/^sus4?/))              { quality = 'sus';   sus = 4; }
+  else if (eat(/^(min|mi|m|-)(?!aj)/)) { quality = 'minor'; third = 3; }
+
+  /* --- major-seventh marker. A bare M or maj means "major triad"; only a
+     following digit (or a lone Δ) makes it a major seventh. */
+  let majFlag = false;
+  if (eat(/^(maj|Maj|MAJ|ma|M)(?=6|7|9|11|13)/)) majFlag = true;
+  else if (eat(/^[Δ∆]/)) majFlag = true;
+  else eat(/^(maj|Maj|M)(?![A-Za-z0-9])/);
+
+  /* --- sixth / seventh / extension */
+  if (eat(/^6/)) { sixth = true; if (eat(/^\/?9/)) adds.push(2); }
+  else {
+    const num = eat(/^(13|11|9|7)/);
+    if (num) {
+      ext = parseInt(num, 10);
+      /* On a diminished triad, 7 means the diminished seventh (bb7 = 9 semitones). */
+      seventh = majFlag ? 11 : (quality === 'dim' ? 9 : 10);
+    } else if (majFlag) seventh = 11;
+    else if (eat(/^5(?![0-9])/)) power = true;          // C5 — no third at all
+  }
+
+  /* --- adds, alterations and a trailing sus, in any order */
+  let guard = 0;
+  while (i < s.length && guard++ < 16) {
+    const susL = eat(/^sus(2|4)?/);
+    if (susL) { sus = susL === 'sus2' ? 2 : 4; continue; }
+    const add = eat(/^add(13|11|9|6|4|2)/);
+    if (add) {
+      const d = parseInt(add.slice(3), 10);
+      adds.push({ iv: { 2:2, 4:5, 6:9, 9:2, 11:5, 13:9 }[d], deg: d });
+      continue;
+    }
+    const alt = eat(/^[#b♯♭](13|11|9|5)/);
+    if (alt) {
+      const sign = (alt[0] === '#' || alt[0] === '♯') ? 1 : -1;
+      const deg = parseInt(alt.slice(1), 10);
+      if (deg === 5) fifth = 7 + sign;
+      else if (deg === 9)  adds.push({ iv: mod12(2 + sign), deg: 9 });
+      else if (deg === 11) adds.push({ iv: mod12(5 + sign), deg: 11 });
+      else adds.push({ iv: mod12(9 + sign), deg: 13 });
+      continue;
+    }
+    if (eat(/^[()\s,]/)) continue;
+    return null;                                        // unrecognised leftovers
+  }
+
+  /* Each tone is tagged with the scale degree it represents. Pitch class alone
+     cannot tell Eb from D#; the degree can — a minor third is always some kind
+     of third, so it takes the third letter above the root. */
+  const tones = [{ iv: 0, deg: 1 }];
+  if (power) tones.push({ iv: 7, deg: 5 });
+  else {
+    tones.push(sus ? (sus === 2 ? { iv: 2, deg: 2 } : { iv: 5, deg: 4 })
+                   : { iv: third, deg: 3 });
+    tones.push({ iv: fifth, deg: 5 });
+  }
+  if (sixth) tones.push({ iv: 9, deg: 6 });
+  if (seventh !== null) tones.push({ iv: seventh, deg: 7 });
+  /* Extensions imply the tones below them. 13th chords conventionally drop the
+     11th, so 13 adds the 9th and 13th only. */
+  if (ext >= 9)   tones.push({ iv: 2, deg: 9 });
+  if (ext === 11) tones.push({ iv: 5, deg: 11 });
+  if (ext >= 13)  tones.push({ iv: 9, deg: 13 });
+  adds.forEach(a => tones.push(a));
+
+  const seen = new Set();
+  const uniq = tones.filter(t => {
+    const k = mod12(t.iv);
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+
+  return { intervals: uniq.map(t => mod12(t.iv)), tones: uniq,
+           quality, third, fifth, seventh, sixth, sus, power, ext };
+}
+
+function parseChord(token) {
+  const raw = token.trim();
+  if (!raw) return null;
+  let body = raw, bassStr = null;
+  const slash = raw.indexOf('/');
+  if (slash > 0) { body = raw.slice(0, slash); bassStr = raw.slice(slash + 1); }
+
+  const root = parseRoot(body);
+  if (!root) return { raw, error: 'no recognisable root note' };
+  const sfxText = body.slice(root.len);
+  const sfx = parseSuffix(sfxText);
+  if (!sfx) return { raw, error: 'unknown chord quality "' + sfxText + '"' };
+
+  let bass = null;
+  if (bassStr !== null) {
+    const b = parseRoot(bassStr);
+    if (!b || b.len !== bassStr.length) return { raw, error: 'bad bass note "' + bassStr + '"' };
+    bass = b;
+  }
+
+  const pcs = sfx.intervals.map(iv => mod12(root.pc + iv));
+  if (bass && !pcs.includes(bass.pc)) pcs.push(bass.pc);
+
+  return { raw, sfxText, root, bass, pcs: [...new Set(pcs)], ...sfx };
+}
+
+/* Letter-based spelling, degree by degree: Cm is C Eb G, never C D# G. */
+function chordNoteNames(ch) {
+  const start = LETTERS.indexOf(ch.root.letter);
+  let rootPc = PC[ch.root.letter];
+  for (const c of ch.root.name.slice(1)) rootPc += (c === '#') ? 1 : -1;
+
+  const names = ch.tones.map(t => {
+    const letter = LETTERS[(start + (t.deg - 1) % 7) % 7];
+    let diff = mod12(mod12(rootPc + t.iv) - PC[letter]);
+    if (diff > 6) diff -= 12;
+    return letter + (diff > 0 ? '#'.repeat(diff) : 'b'.repeat(-diff));
+  });
+
+  if (ch.bass && !ch.tones.some(t => mod12(ch.root.pc + t.iv) === ch.bass.pc)) {
+    names.push(ch.bass.name);
+  }
+  return names;
+}
+
+/* ---- capo transposition ------------------------------------------------ */
+
+/* Guitar-chart spelling: the names players actually see written above the staff
+   on a lead sheet. Db and D# exist, but C#/Eb is what ends up on the page. */
+const CAPO_NAMES = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
+
+function respell(pc) {
+  const name = CAPO_NAMES[mod12(pc)];
+  return { pc: mod12(pc), name, letter: name[0], len: name.length };
+}
+
+/* A capo raises every string, so the shape you finger sounds `fret` semitones
+   higher. The chord's interval structure is untouched — only its root moves. */
+function transposeChord(ch, shift) {
+  const root = respell(ch.root.pc + shift);
+  const bass = ch.bass ? respell(ch.bass.pc + shift) : null;
+  return Object.assign({}, ch, {
+    root, bass,
+    pcs: ch.pcs.map(p => mod12(p + shift)),
+    raw: root.name + ch.sfxText + (bass ? '/' + bass.name : '')
+  });
+}
+
+/* Names a pitch class the way the detected key would write it. CAPO_NAMES is
+   only a first guess made before the key is known; once it is, the IV of Ab
+   major must read Db, not C#. Anything outside the key falls back to flats,
+   which is how borrowed chords (bVII, bVI, bIII) are almost always spelled. */
+function keySpeller(tonic, mode) {
+  const keyRoot = (mode === 'major' ? MAJOR_KEY_NAMES : MINOR_KEY_NAMES)[tonic];
+  const steps = mode === 'major' ? MAJOR_SCALE : NAT_MINOR;
+  const names = spellScale(keyRoot, steps);
+  const map = {};
+  steps.forEach((iv, i) => { map[mod12(tonic + iv)] = names[i]; });
+  if (mode === 'minor') map[mod12(tonic + 11)] = spellScale(keyRoot, HARM_MINOR)[6];
+  return (pc) => map[mod12(pc)] || FLAT_NAMES[mod12(pc)];
+}
+
+function respellChord(ch, spell) {
+  const name = spell(ch.root.pc);
+  ch.root = { pc: ch.root.pc, name, letter: name[0], len: name.length };
+  if (ch.bass) {
+    const b = spell(ch.bass.pc);
+    ch.bass = { pc: ch.bass.pc, name: b, letter: b[0], len: b.length };
+  }
+  ch.raw = name + ch.sfxText + (ch.bass ? '/' + ch.bass.name : '');
+}
+
+/* ---- key scoring ------------------------------------------------------ */
+
+function isDominant(ch)  { return ch.seventh === 10 && ch.quality === 'major' && !ch.sus; }
+function isMajorish(ch)  { return ch.quality === 'major' && !ch.sus; }
+function isMinorish(ch)  { return ch.quality === 'minor'; }
+
+function scoreKey(chords, tonic, mode) {
+  const allowed = new Set((mode === 'major' ? MAJOR_SCALE : MINOR_UNION).map(x => mod12(tonic + x)));
+  const targets = mode === 'major' ? MAJOR_TRIAD_DEGREES : MINOR_TRIAD_DEGREES;
+  let score = 0;
+  const reasons = [];
+
+  chords.forEach((ch, idx) => {
+    const deg = mod12(ch.root.pc - tonic);
+    const outside = ch.pcs.filter(p => !allowed.has(p)).length;
+    const inside  = ch.pcs.length - outside;
+
+    /* Membership, normalised by chord size so a 13th chord cannot outvote
+       three triads simply by containing more notes. */
+    score += 1.6 * (inside / ch.pcs.length);
+
+    if (outside) {
+      let penalty = 1.7 * outside;
+      /* A dominant resolves DOWN a fifth, so the chord it points at sits five
+         semitones above it, not seven. */
+      const secondaryTarget = mod12(deg + 5);
+      if (isMajorish(ch) && targets.includes(secondaryTarget) && secondaryTarget !== deg) {
+        /* V/x — idiomatic, so mostly forgiven. But a plain major triad is far
+           weaker evidence of a secondary dominant than an actual seventh chord:
+           forgive it too readily and every key gains a free pass on any major
+           triad a fifth above one of its degrees. */
+        penalty *= isDominant(ch) ? 0.25 : 0.55;
+      } else if (mode === 'major' && [10, 5, 8, 3].includes(deg)) {
+        penalty *= 0.35;                                  // bVII, iv, bVI, bIII — modal mixture
+      } else if (mode === 'minor' && deg === 0 && isMajorish(ch)) {
+        penalty *= 0.35;                                  // Picardy third
+      }
+      score -= penalty;
+    }
+
+    /* Functional evidence. The dominant seventh is the strongest single signal
+       a key has: it contains both the leading tone and the tritone that only
+       resolves one way. */
+    if (deg === 7 && isDominant(ch)) { score += 3.0; reasons.push({ kind: 'V7', chord: ch }); }
+    else if (deg === 7 && isMajorish(ch)) {
+      score += mode === 'major' ? 1.0 : 1.8;              // in minor this is the raised leading tone
+      reasons.push({ kind: 'V', chord: ch });
+    }
+    else if (deg === 7 && isMinorish(ch) && mode === 'minor') score += 0.5;
+    else if (deg === 10 && isMajorish(ch) && mode === 'minor') score += 0.3;
+    else if (deg === 11 && (ch.quality === 'dim' || (isMinorish(ch) && ch.pcs.includes(mod12(tonic + 5))))) {
+      score += 1.2; reasons.push({ kind: 'vii', chord: ch });
+    }
+
+    const tonicChord = deg === 0 && (mode === 'major' ? isMajorish(ch) : isMinorish(ch));
+    if (tonicChord && idx === 0) { score += 1.5; reasons.push({ kind: 'first', chord: ch }); }
+    if (tonicChord && idx === chords.length - 1) { score += 1.8; reasons.push({ kind: 'last', chord: ch }); }
+
+    /* ii-V-I and V-I motion */
+    if (idx >= 1) {
+      const prev = mod12(chords[idx - 1].root.pc - tonic);
+      if (deg === 0 && prev === 7 && tonicChord) {
+        score += 1.0;
+        if (idx >= 2 && mod12(chords[idx - 2].root.pc - tonic) === 2 && isMinorish(chords[idx - 2])) {
+          score += 1.5; reasons.push({ kind: 'ii-V-I', chord: ch });
+        }
+      }
+    }
+  });
+
+  return { tonic, mode, score, reasons };
+}
+
+function analyze(input, capo) {
+  const shift = mod12(capo || 0);
+  const tokens = String(input).split(/[\s,|]+/).filter(Boolean);
+  const parsed = tokens.map(t => {
+    const ch = parseChord(t);
+    if (ch && !ch.error) ch.sounding = shift ? transposeChord(ch, shift) : ch;
+    return ch;
+  });
+  /* Everything downstream analyses what is actually heard, not what is fingered. */
+  const chords = parsed.filter(c => c && !c.error).map(c => c.sounding);
+  if (!chords.length) return { parsed, chords: [], candidates: [], ok: false, capo: shift };
+
+  const candidates = [];
+  for (let t = 0; t < 12; t++) {
+    candidates.push(scoreKey(chords, t, 'major'));
+    candidates.push(scoreKey(chords, t, 'minor'));
+  }
+
+  /* Softmax over all 24 keys. Temperature is deliberately warm: when two keys
+     genuinely fit (the relative major/minor problem) the app should say so
+     rather than manufacture certainty. */
+  const T = 1.5;
+  const max = Math.max(...candidates.map(c => c.score));
+  let sum = 0;
+  candidates.forEach(c => { c.exp = Math.exp((c.score - max) / T); sum += c.exp; });
+  candidates.forEach(c => { c.confidence = c.exp / sum; });
+  candidates.sort((a, b) => b.confidence - a.confidence);
+
+  const top = candidates[0];
+  const ambiguous = candidates[1] && (top.confidence - candidates[1].confidence) < 0.08;
+
+  /* Now that the key is known, the transposed chords can be spelled in it. */
+  if (shift) {
+    const spell = keySpeller(top.tonic, top.mode);
+    chords.forEach(ch => respellChord(ch, spell));
+  }
+
+  return {
+    parsed, chords, candidates,
+    ok: true,
+    capo: shift,
+    top,
+    ambiguous,
+    romans: romanAnalysis(chords, top.tonic, top.mode),
+    explanation: explain(chords, top, candidates[1], ambiguous)
+  };
+}
+
+/* ---- naming ----------------------------------------------------------- */
+
+/* Chart shorthand: F, Am — what a player writes above a stave. */
+function shortKeyName(tonic, mode) {
+  return mode === 'major' ? MAJOR_KEY_NAMES[tonic] : MINOR_KEY_NAMES[tonic] + 'm';
+}
+
+function keyName(tonic, mode) {
+  return (mode === 'major' ? MAJOR_KEY_NAMES : MINOR_KEY_NAMES)[tonic] +
+         (mode === 'major' ? ' major' : ' minor');
+}
+
+function noteName(pc, useFlats) {
+  return (useFlats ? FLAT_NAMES : SHARP_NAMES)[pc];
+}
+
+/* Letter-based scale spelling: one letter per degree, accidental derived from
+   the gap. This is what makes Bb major read Bb C D Eb F G A and not A# C D... */
+function spellScale(tonicName, intervals) {
+  const start = LETTERS.indexOf(tonicName[0]);
+  let tonicPc = PC[tonicName[0]];
+  for (const c of tonicName.slice(1)) tonicPc += (c === '#') ? 1 : -1;
+  return intervals.map((iv, i) => {
+    const letter = LETTERS[(start + i) % 7];
+    let diff = mod12(mod12(tonicPc + iv) - PC[letter]);
+    if (diff > 6) diff -= 12;
+    return letter + (diff > 0 ? '#'.repeat(diff) : 'b'.repeat(-diff));
+  });
+}
+
+const SHARP_ORDER = ['F','C','G','D','A','E','B'];
+const FLAT_ORDER  = ['B','E','A','D','G','C','F'];
+const MAJOR_FIFTHS = { C:0, G:1, D:2, A:3, E:4, B:5, 'F#':6, 'C#':7, F:-1, Bb:-2, Eb:-3, Ab:-4, Db:-5, Gb:-6, Cb:-7 };
+/* Spelled explicitly rather than derived: Eb minor's relative is Gb major
+   (6 flats), not F# major (6 sharps), and pitch class alone cannot tell them apart. */
+const MINOR_REL_MAJOR = ['Eb','E','F','Gb','G','Ab','A','Bb','B','C','Db','D'];
+
+function keySignature(tonic, mode) {
+  const rootName = mode === 'major' ? MAJOR_KEY_NAMES[tonic] : MINOR_REL_MAJOR[tonic];
+  const n = MAJOR_FIFTHS[rootName];
+  if (n === undefined) return { count: 0, text: '—', notes: [] };
+  if (n === 0) return { count: 0, text: 'no sharps or flats', notes: [] };
+  const notes = (n > 0 ? SHARP_ORDER.slice(0, n).map(x => x + '#') : FLAT_ORDER.slice(0, -n).map(x => x + 'b'));
+  const word = Math.abs(n) === 1 ? (n > 0 ? 'sharp' : 'flat') : (n > 0 ? 'sharps' : 'flats');
+  return { count: n, text: Math.abs(n) + ' ' + word, notes };
+}
+
+/* ---- the diatonic chords of a key ------------------------------------- */
+
+const MAJOR_DEGREE_RN = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
+const MINOR_DEGREE_RN = ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII'];
+const HARM_MINOR = [0,2,3,5,7,8,11];
+
+/* Every triad the key builds on its own scale, spelled properly and named by
+   degree. Qualities are derived from the scale rather than hardcoded, so the
+   same code serves major and minor. */
+function diatonicChords(tonic, mode) {
+  const keyRoot = (mode === 'major' ? MAJOR_KEY_NAMES : MINOR_KEY_NAMES)[tonic];
+  const steps = mode === 'major' ? MAJOR_SCALE : NAT_MINOR;
+  const names = spellScale(keyRoot, steps);
+  const rns = mode === 'major' ? MAJOR_DEGREE_RN : MINOR_DEGREE_RN;
+
+  const out = [];
+  for (let i = 0; i < 7; i++) {
+    const root = mod12(tonic + steps[i]);
+    const third = mod12(mod12(tonic + steps[(i + 2) % 7]) - root);
+    const fifth = mod12(mod12(tonic + steps[(i + 4) % 7]) - root);
+    let sfx = '';
+    if (third === 3 && fifth === 6) sfx = 'dim';
+    else if (third === 3) sfx = 'm';
+    else if (fifth === 8) sfx = 'aug';
+    out.push({ roman: rns[i], name: names[i] + sfx, rootPc: root, extra: false });
+  }
+
+  /* A minor key has no real dominant until the seventh degree is raised, and
+     nearly all minor-key music does raise it. Show both. */
+  if (mode === 'minor') {
+    const har = spellScale(keyRoot, HARM_MINOR);
+    out.push({ roman: 'V',    name: har[4],         rootPc: mod12(tonic + 7),  extra: true });
+    out.push({ roman: 'vii°', name: har[6] + 'dim', rootPc: mod12(tonic + 11), extra: true });
+  }
+  return out;
+}
+
+/* Indices into diatonicChords(). Major returns 7 entries (I..vii°); minor
+   returns 9, the natural-minor seven plus the raised V and vii°. */
+const FUNCTION_GROUPS = {
+  major: [
+    { name: 'Tonic',       idx: [0, 2, 5] },        // I, iii, vi
+    { name: 'Subdominant', idx: [1, 3] },           // ii, IV
+    { name: 'Dominant',    idx: [4, 6] }            // V, vii°
+  ],
+  minor: [
+    { name: 'Tonic',       idx: [0, 2, 5] },        // i, III, VI
+    { name: 'Subdominant', idx: [1, 3] },           // ii°, iv
+    { name: 'Dominant',    idx: [4, 6, 7, 8] }      // v, VII, and the raised V, vii°
+  ]
+};
+
+function harmonicFunctions(tonic, mode) {
+  const chords = diatonicChords(tonic, mode);
+  return FUNCTION_GROUPS[mode].map(g => ({
+    name: g.name,
+    chords: g.idx.map(i => chords[i]).filter(Boolean)
+  }));
+}
+
+/* ---- circle of fifths -------------------------------------------------- */
+
+/* Twelve spokes, each a perfect fifth clockwise from the last: C G D A E B F#
+   Db Ab Eb Bb F. The relative minor rides the same spoke as its major, which is
+   exactly why the two are so easy to confuse. */
+/* At the foot of the wheel the sharp and flat sides meet, and the same three
+   spokes carry two names apiece. Both are correct — which one you write depends
+   on which direction you arrived from. */
+const ENHARMONIC_MAJOR = { 11: 'Cb', 6: 'Gb', 1: 'C#' };
+const ENHARMONIC_MINOR = { 8: 'Abm', 3: 'D#m', 10: 'A#m' };
+
+function circleOfFifths() {
+  const spokes = [];
+  for (let i = 0; i < 12; i++) {
+    const pc = mod12(i * 7), rel = mod12(pc + 9);
+    spokes.push({
+      angle: i * 30,
+      majorPc: pc,  major: MAJOR_KEY_NAMES[pc],         majorAlt: ENHARMONIC_MAJOR[pc] || null,
+      minorPc: rel, minor: MINOR_KEY_NAMES[rel] + 'm',  minorAlt: ENHARMONIC_MINOR[rel] || null
+    });
+  }
+  return spokes;
+}
+
+/* ---- modes ------------------------------------------------------------- */
+
+const MODE_NAMES = ['Ionian', 'Dorian', 'Phrygian', 'Lydian', 'Mixolydian', 'Aeolian', 'Locrian'];
+
+/* Modes ranked by brightness. Each step raises exactly one scale degree by a
+   semitone, so the order is also a walk clockwise round the circle of fifths:
+   Locrian has the most flattened degrees, Lydian the most raised. */
+const MODE_BRIGHTNESS = ['Locrian', 'Phrygian', 'Aeolian', 'Dorian', 'Mixolydian', 'Ionian', 'Lydian'];
+
+/* Seven notes, seven modes — the same collection heard from seven different
+   home notes. A major key starts on Ionian; a minor key is Aeolian, which is
+   the sixth mode, so its degrees are offset by five. */
+function modesOfKey(tonic, mode) {
+  const keyRoot = (mode === 'major' ? MAJOR_KEY_NAMES : MINOR_KEY_NAMES)[tonic];
+  const names = spellScale(keyRoot, mode === 'major' ? MAJOR_SCALE : NAT_MINOR);
+  const offset = mode === 'major' ? 0 : 5;
+  return names.map((root, i) => ({
+    root,
+    mode: MODE_NAMES[(offset + i) % 7],
+    notes: names.slice(i).concat(names.slice(0, i))
+  }));
+}
+
+/* ---- roman numeral analysis ------------------------------------------- */
+
+const MAJOR_RN = { 0:'I', 1:'bII', 2:'II', 3:'bIII', 4:'III', 5:'IV', 6:'#IV', 7:'V', 8:'bVI', 9:'VI', 10:'bVII', 11:'VII' };
+const MINOR_RN = { 0:'I', 1:'bII', 2:'II', 3:'III', 4:'#III', 5:'IV', 6:'#IV', 7:'V', 8:'VI', 9:'#VI', 10:'VII', 11:'VII' };
+
+function chordFigure(ch) {
+  let f = '';
+  if (ch.quality === 'dim') f += ch.seventh === 9 ? '°7' : '°';
+  else if (ch.quality === 'aug') f += '+';
+  else if (ch.quality === 'minor' && ch.fifth === 6 && ch.seventh === 10) f += 'ø7';
+  if (!f) {
+    if (ch.sus) f += 'sus' + ch.sus;
+    if (ch.sixth) f += '6';
+    else if (ch.seventh === 11) f += 'maj7';
+    else if (ch.seventh === 10) f += ch.ext > 7 ? String(ch.ext) : '7';
+    if (ch.power) f += '5';
+  }
+  return f;
+}
+
+function romanAnalysis(chords, tonic, mode) {
+  const allowed = new Set((mode === 'major' ? MAJOR_SCALE : MINOR_UNION).map(x => mod12(tonic + x)));
+  const map = mode === 'major' ? MAJOR_RN : MINOR_RN;
+  const targets = mode === 'major' ? MAJOR_TRIAD_DEGREES : MINOR_TRIAD_DEGREES;
+
+  return chords.map(ch => {
+    const deg = mod12(ch.root.pc - tonic);
+    const outside = ch.pcs.some(p => !allowed.has(p));
+    const minorish = ch.quality === 'minor' || ch.quality === 'dim';
+    /* Case carries the quality: uppercase major, lowercase minor. Only the
+       numeral letters change — a bIII stays flat when it becomes biii. */
+    let rn = map[deg];
+    if (minorish) rn = rn.replace(/[IV]+/, m => m.toLowerCase());
+    rn += chordFigure(ch);
+
+    /* A non-diatonic major/dominant chord a fifth above a diatonic degree is a
+       secondary dominant, not an anomaly. Label it as such. */
+    let note = outside ? 'borrowed' : 'diatonic';
+    if (outside && isMajorish(ch)) {
+      const target = mod12(deg + 5);
+      if (targets.includes(target) && target !== deg) {
+        const targetMinor = mode === 'major' ? [2,4,9].includes(target) : [0,5,7].includes(target);
+        let t = map[target];
+        if (targetMinor) t = t.replace(/[IV]+/, m => m.toLowerCase());
+        rn = (isDominant(ch) ? 'V7/' : 'V/') + t;
+        note = 'secondary dominant';
+      }
+    }
+    return { chord: ch, roman: rn, note, outside };
+  });
+}
+
+/* ---- plain-language explanation --------------------------------------- */
+
+function explain(chords, top, runnerUp, ambiguous) {
+  const key = keyName(top.tonic, top.mode);
+  const useFlats = (top.mode === 'major' ? MAJOR_KEY_NAMES : MINOR_KEY_NAMES)[top.tonic].includes('b');
+  const v7 = top.reasons.find(r => r.kind === 'V7');
+  const vii = top.reasons.find(r => r.kind === 'vii');
+  const v = top.reasons.find(r => r.kind === 'V');
+  const iivi = top.reasons.find(r => r.kind === 'ii-V-I');
+  const last = top.reasons.find(r => r.kind === 'last');
+  const lead = noteName(mod12(top.tonic + 11), useFlats);
+  const tonicNote = noteName(top.tonic, useFlats);
+
+  const allowed = new Set((top.mode === 'major' ? MAJOR_SCALE : MINOR_UNION).map(x => mod12(top.tonic + x)));
+  const fits = chords.filter(ch => ch.pcs.every(p => allowed.has(p))).length;
+  const allFit = fits === chords.length;
+
+  let why;
+  if (iivi) {
+    why = iivi.chord.raw + ' completes a ii–V–I cadence in ' + key + ', the strongest signal a key can give.';
+  } else if (v7) {
+    why = v7.chord.raw + ' is the dominant seventh of ' + key + ': it contains ' + lead +
+          ', the leading tone, and a tritone that resolves onto ' + tonicNote + '.';
+  } else if (v && top.mode === 'minor') {
+    why = v.chord.raw + ' raises the seventh degree to ' + lead + ', which only happens in ' + key + '.';
+  } else if (last) {
+    why = (allFit ? 'Every chord fits ' + key
+                  : fits + ' of ' + chords.length + ' chords fit ' + key) +
+          ', and the progression comes to rest on ' + last.chord.raw + '.';
+  } else if (vii) {
+    why = vii.chord.raw + ' is the leading-tone chord of ' + key + ', pulling towards ' + tonicNote + '.';
+  } else if (v) {
+    why = 'The chords fit ' + key + ', and ' + v.chord.raw + ' acts as its dominant.';
+  } else {
+    why = (allFit ? 'All ' + chords.length : fits + ' of ' + chords.length) +
+          ' chords are diatonic to ' + key + '.';
+  }
+
+  if (ambiguous && runnerUp) {
+    why += ' This is genuinely ambiguous, though — it could just as easily be ' +
+           keyName(runnerUp.tonic, runnerUp.mode) + '.';
+  }
+  return why;
+}
+
+/* Re-reads the same progression as if a different candidate were the key. The
+   evidence does not change — only which key we are reading it against. */
+function describe(r, tonic, mode) {
+  const t = r.candidates.find(c => c.tonic === tonic && c.mode === mode) || r.candidates[0];
+  const isTop = t === r.candidates[0];
+  /* With a capo, the sounding chords were spelled for the detected key; a
+     different key spells them differently. */
+  if (r.capo) {
+    const spell = keySpeller(t.tonic, t.mode);
+    r.chords.forEach(ch => respellChord(ch, spell));
+  }
+  return {
+    top: t,
+    picked: !isTop,
+    ambiguous: isTop && r.ambiguous,
+    romans: romanAnalysis(r.chords, t.tonic, t.mode),
+    explanation: explain(r.chords, t, r.candidates[1], isTop && r.ambiguous)
+  };
+}
+
+function confidenceWord(p, ambiguous) {
+  if (ambiguous) return 'ambiguous';
+  if (p >= 0.65) return 'strong evidence';
+  if (p >= 0.40) return 'likely';
+  if (p >= 0.25) return 'weak evidence';
+  return 'ambiguous';
+}
+
+/* ---- self-tests -------------------------------------------------------- */
+
+function selfTest(report) {
+  const cases = [
+    ['C G Am F',        'C major'],
+    ['G C D G',         'Bb major', 3],     // capo 3: G shapes sound in Bb
+    ['Am Dm E7 Am',     'C minor',  3],
+    ['E A B7',          'G major',  3],
+    ['Am Dm E7 Am',     'A minor'],
+    ['Bb Eb F7 Bb',     'Bb major'],
+    ['Bm E7 Bm',        'B minor'],
+    ['Dm7 G7 Cmaj7',    'C major'],
+    ['E A B7',          'E major'],
+    ['Cm Ab Eb Bb',     'C minor'],
+    ['D G A D',         'D major'],
+    ['F#m Bm E A',      'A major'],
+    ['G C D G',         'G major'],
+    ['Em Am B7 Em',     'E minor'],
+    ['F Bb C7 F',       'F major'],
+    ['C F G C',         'C major'],
+    ['Ab Db Eb7 Ab',    'Ab major']
+  ];
+  let pass = 0;
+  const lines = [];
+  for (const [input, expected, capo] of cases) {
+    const r = analyze(input, capo);
+    const got = r.ok ? keyName(r.top.tonic, r.top.mode) : 'PARSE FAIL';
+    const ok = got === expected;
+    if (ok) pass++;
+    lines.push((ok ? 'pass' : 'FAIL') + '  ' + (input + (capo ? ' [capo ' + capo + ']' : '')).padEnd(26) + ' → ' + got +
+               (ok ? '' : '   (expected ' + expected + ')'));
+  }
+  /* Parser must survive garbage without taking the whole analysis down. */
+  const junk = analyze('C Hm7 G');
+  const junkOk = junk.ok && junk.parsed.some(p => p.error) && junk.chords.length === 2;
+  if (junkOk) pass++; else lines.push('FAIL  bad-token recovery');
+  lines.push((junkOk ? 'pass' : 'FAIL') + '  bad-token recovery');
+
+  report(lines, pass, cases.length + 1);
+  return pass === cases.length + 1;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { analyze, keyName, shortKeyName, selfTest, parseChord, chordNoteNames, transposeChord,
+                     spellScale, keySignature, diatonicChords, harmonicFunctions,
+                     circleOfFifths, describe, modesOfKey, MODE_BRIGHTNESS };
+}
+</script>
+
+<script>
+/* =========================================================================
+   UI LAYER — talks to analyze() and nothing else.
+   ========================================================================= */
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const input = $('chords'), capoIn = $('capo');
+  const chipbox = $('chips'), chipslabel = $('chips-label');
+  const errbox = $('parse-error'), out = $('result');
+
+  function capoValue() {
+    const n = parseInt(capoIn.value, 10);
+    return Number.isFinite(n) && n > 0 ? Math.min(n, 11) : 0;
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
+
+  function renderChips(parsed, capo) {
+    chipbox.innerHTML = '';
+    const errors = [];
+    parsed.forEach(p => {
+      const el = document.createElement('span');
+      el.className = 'chip' + (p.error ? ' bad' : '');
+      if (p.error) {
+        el.innerHTML = '<b>' + esc(p.raw) + '</b> ?';
+        errors.push(p.raw + ' — ' + p.error);
+      } else if (capo) {
+        /* Shape you finger → chord that actually sounds. */
+        el.innerHTML = '<b>' + esc(p.raw) + '</b>' +
+                       '<span class="to"> → </span>' +
+                       '<span class="sounds">' + esc(p.sounding.raw) + '</span> ' +
+                       esc(chordNoteNames(p.sounding).join(' '));
+      } else {
+        el.innerHTML = '<b>' + esc(p.raw) + '</b> ' + esc(chordNoteNames(p).join(' '));
+      }
+      chipbox.appendChild(el);
+    });
+    chipslabel.hidden = !parsed.length;
+    chipslabel.textContent = capo
+      ? 'How each chord was read'
+      : 'How each chord was read, and the notes it contains';
+
+    errbox.hidden = !errors.length;
+    errbox.textContent = errors.join('  ·  ');
+  }
+
+  /* Polar layout: spoke 0 (C) points straight up, then clockwise by fifths.
+     Radii, outside in: rim 182, the divide between majors and minors 128, hub 70. */
+  const DEGREES = {
+    major: { outer: ['IV', 'I', 'V'],    inner: ['ii', 'vi', 'iii'] },
+    minor: { outer: ['VI', 'III', 'VII'], inner: ['iv', 'i', 'v'] }
+  };
+
+  function circleSvg(t) {
+    const CX = 190, CY = 190;
+    const R_RIM = 182, R_DIV = 128, R_HUB = 70;
+    const R_MAJ = 160, R_MAJ_DEG = 136;
+    const R_MIN = 100, R_MIN_DEG = 76;
+
+    const at = (deg, rad) => {
+      const a = (deg - 90) * Math.PI / 180;
+      return [CX + rad * Math.cos(a), CY + rad * Math.sin(a)];
+    };
+    const n = (v) => Math.round(v * 10) / 10;
+
+    /* A spoke with two names stacks them; the pair is one key, so the highlight
+       covers both lines. */
+    const label = (cls, x, y, name, alt, on, inKey) => {
+      const c = cls + (on ? ' on' : (inKey ? ' in' : ''));
+      const open = '<text class="' + c + '" x="' + n(x) + '" y="' + n(y) + '">';
+      if (!alt) return open + esc(name) + '</text>';
+      return open +
+        '<tspan x="' + n(x) + '" dy="-0.5em">' + esc(name) + '</tspan>' +
+        '<tspan class="alt" x="' + n(x) + '" dy="1.05em">' + esc(alt) + '</tspan>' +
+        '</text>';
+    };
+
+    const arc = (deg0, deg1, rIn, rOut) => {
+      const [ax, ay] = at(deg0, rOut), [bx, by] = at(deg1, rOut);
+      const [cx, cy] = at(deg1, rIn),  [dx, dy] = at(deg0, rIn);
+      return 'M' + n(ax) + ' ' + n(ay) +
+             'A' + rOut + ' ' + rOut + ' 0 0 1 ' + n(bx) + ' ' + n(by) +
+             'L' + n(cx) + ' ' + n(cy) +
+             'A' + rIn + ' ' + rIn + ' 0 0 0 ' + n(dx) + ' ' + n(dy) + 'Z';
+    };
+
+    const spokes = circleOfFifths();
+    /* Every chord in a key sits on three neighbouring spokes: the tonic between
+       its subdominant and its dominant. Majors ride the outer ring, their
+       relative minors the inner one — six chords, one contiguous wedge. */
+    const home = spokes.findIndex(sp =>
+      t.mode === 'major' ? sp.majorPc === t.tonic : sp.minorPc === t.tonic);
+    const degs = DEGREES[t.mode];
+
+    /* A diminished chord has no key, so it gets no spoke of its own — but its
+       root is still a note on the wheel. Mark it there, dashed, to say "this
+       degree lives here without the wheel being about it". */
+    /* Parallel key: same tonic, opposite mode — C major and C minor. It sits
+       three spokes away, which is exactly why swapping to it changes the key
+       signature by three accidentals. */
+    const parallel = spokes.findIndex(sp =>
+      t.mode === 'major' ? sp.minorPc === t.tonic : sp.majorPc === t.tonic);
+    const parDegs = DEGREES[t.mode === 'major' ? 'minor' : 'major'];
+
+    const dimAt = new Map();
+    diatonicChords(t.tonic, t.mode)
+      .filter(d => /dim/.test(d.name))
+      .forEach(d => {
+        const i = spokes.findIndex(sp => sp.majorPc === d.rootPc);
+        /* The vii keeps its degree sign — it is the one the ear is listening for. */
+        if (i >= 0) dimAt.set(i, /vii/.test(d.roman) ? d.roman : d.roman.replace('°', ''));
+      });
+
+    /* Shaded like the wedge, but only across the outer band: the note is in the
+       key, the relative minor sharing its spoke is not. */
+    let dimRegions = '';
+    dimAt.forEach((roman, i) => {
+      dimRegions += '<path class="region" d="' +
+                    arc(i * 30 - 15, i * 30 + 15, R_DIV, R_RIM) + '"/>';
+    });
+
+    let g = '<path class="region" d="' +
+              arc(home * 30 - 45, home * 30 + 45, R_HUB, R_RIM) + '"/>' +
+            dimRegions +
+            '<circle class="ring" cx="' + CX + '" cy="' + CY + '" r="' + R_RIM + '"/>' +
+            '<circle class="ring" cx="' + CX + '" cy="' + CY + '" r="' + R_DIV + '"/>' +
+            '<circle class="ring" cx="' + CX + '" cy="' + CY + '" r="' + R_HUB + '"/>' +
+            '<path class="region-outline" d="' +
+              arc(parallel * 30 - 45, parallel * 30 + 45, R_HUB, R_RIM) + '"/>';
+
+    for (let i = 0; i < 12; i++) {
+      const [x1, y1] = at(i * 30 + 15, R_HUB), [x2, y2] = at(i * 30 + 15, R_RIM);
+      g += '<line class="spoke" x1="' + n(x1) + '" y1="' + n(y1) +
+           '" x2="' + n(x2) + '" y2="' + n(y2) + '"/>';
+    }
+
+    spokes.forEach((sp, i) => {
+      const [mx, my] = at(sp.angle, R_MAJ);
+      const [ix, iy] = at(sp.angle, R_MIN);
+      const majOn = t.mode === 'major' && i === home;
+      const minOn = t.mode === 'minor' && i === home;
+
+      /* Subdominant, tonic, dominant — the only three spokes the key uses. */
+      const off = mod12(i - home);
+      const slot = off === 11 ? 0 : (off === 0 ? 1 : (off === 1 ? 2 : -1));
+      const lit = slot >= 0;
+
+      if (majOn) g += '<circle class="mark" cx="' + n(mx) + '" cy="' + n(my) +
+                      '" r="' + (sp.majorAlt ? 19 : 17) + '"/>';
+      if (minOn) g += '<circle class="mark" cx="' + n(ix) + '" cy="' + n(iy) +
+                      '" r="' + (sp.minorAlt ? 17 : 15) + '"/>';
+
+      if (i === parallel) {
+        const [px, py] = t.mode === 'major' ? [ix, iy] : [mx, my];
+        const alt = t.mode === 'major' ? sp.minorAlt : sp.majorAlt;
+        const rad = t.mode === 'major' ? (alt ? 17 : 15) : (alt ? 19 : 17);
+        g += '<circle class="mark parallel" cx="' + n(px) + '" cy="' + n(py) +
+             '" r="' + rad + '"/>';
+      }
+
+      if (dimAt.has(i)) {
+        const [px, py] = at(sp.angle, R_MAJ_DEG);
+        g += '<text class="deg" x="' + n(px) + '" y="' + n(py) + '">' +
+             esc(dimAt.get(i)) + '</text>';
+      }
+
+      g += label('maj', mx, my, sp.major, sp.majorAlt, majOn, lit || dimAt.has(i));
+      g += label('min', ix, iy, sp.minor, sp.minorAlt, minOn, lit);
+
+      if (lit) {
+        const [dx, dy] = at(sp.angle, R_MAJ_DEG);
+        const [ex, ey] = at(sp.angle, R_MIN_DEG);
+        g += '<text class="deg" x="' + n(dx) + '" y="' + n(dy) + '">' +
+             esc(degs.outer[slot]) + '</text>';
+        g += '<text class="deg" x="' + n(ex) + '" y="' + n(ey) + '">' +
+             esc(degs.inner[slot]) + '</text>';
+      }
+
+      /* Same three-spoke shape, read in the parallel key. The two wedges never
+         overlap — they sit three spokes apart — so the degrees cannot collide. */
+      const poff = mod12(i - parallel);
+      const pslot = poff === 11 ? 0 : (poff === 0 ? 1 : (poff === 1 ? 2 : -1));
+      if (pslot >= 0) {
+        const [dx, dy] = at(sp.angle, R_MAJ_DEG);
+        const [ex, ey] = at(sp.angle, R_MIN_DEG);
+        g += '<text class="deg par" x="' + n(dx) + '" y="' + n(dy) + '">' +
+             esc(parDegs.outer[pslot]) + '</text>';
+        g += '<text class="deg par" x="' + n(ex) + '" y="' + n(ey) + '">' +
+             esc(parDegs.inner[pslot]) + '</text>';
+      }
+    });
+
+    return '<svg class="cof" viewBox="0 0 380 380" role="img" aria-label="Circle of fifths, ' +
+           esc(keyName(t.tonic, t.mode)) + ' and its six diatonic chords highlighted ' +
+           'with their scale degrees">' + g + '</svg>';
+  }
+
+  function render(base) {
+    if (!base.ok) { out.innerHTML = ''; return; }
+    /* A key the user picked overrides the detected one for the whole readout. */
+    const r = chosen ? Object.assign({}, base, describe(base, chosen.tonic, chosen.mode)) : base;
+    const t = r.top;
+    const pct = Math.round(t.confidence * 100);
+    const word = confidenceWord(t.confidence, r.ambiguous);
+    const relTonic = t.mode === 'major' ? mod12(t.tonic + 9) : mod12(t.tonic + 3);
+    const relMode = t.mode === 'major' ? 'minor' : 'major';
+    const alts = r.candidates.filter(c => c !== t).slice(0, 4).map(c =>
+      '<li><button type="button" data-tonic="' + c.tonic + '" data-mode="' + c.mode +
+        '" title="' + esc(keyName(c.tonic, c.mode)) + '">' +
+        '<span class="nm">' + esc(shortKeyName(c.tonic, c.mode)) + '</span>' +
+        '<span class="pct">' + Math.round(c.confidence * 100) + '%</span>' +
+        (c === r.candidates[0] ? '<span class="tag">detected</span>' : '') +
+      '</button></li>').join('');
+
+    const grades = diatonicChords(t.tonic, t.mode).map(d =>
+      '<div class="dc' + (d.extra ? ' extra' : '') + '">' +
+        '<span class="num">' + esc(d.roman) + '</span>' +
+        '<span class="nm">' + esc(d.name) + '</span>' +
+      '</div>').join('');
+
+    const funcs = harmonicFunctions(t.tonic, t.mode).map(g =>
+      '<tr><td>' + esc(g.name) + '</td>' +
+      '<td class="rn">' + esc(g.chords.map(c => c.roman).join('  ')) + '</td>' +
+      '<td class="sym">' + esc(g.chords.map(c => c.name).join('  ')) + '</td></tr>').join('');
+
+    const modes = modesOfKey(t.tonic, t.mode).map((m, i) =>
+      '<tr' + (i === 0 ? ' class="tonic"' : '') + '>' +
+        '<td class="sym">' + esc(m.root) + '</td>' +
+        '<td>' + esc(m.mode) + '</td>' +
+        '<td class="sym">' + esc(m.notes.join(' ')) + '</td>' +
+      '</tr>').join('');
+
+    /* Each chip a shade brighter than the last, so the ordering is visible and
+       not merely asserted. */
+    const ownMode = t.mode === 'major' ? 'Ionian' : 'Aeolian';
+    const bright = MODE_BRIGHTNESS.map((m, i) => {
+      const own = m === ownMode;
+      return '<li class="' + (own ? 'own' : '') + '" style="opacity:' +
+             (own ? '1' : (0.4 + i * 0.09).toFixed(2)) + '">' + esc(m) + '</li>';
+    }).join('');
+
+    const rows = r.romans.map(x =>
+      '<tr><td class="sym">' + esc(x.chord.raw) + '</td>' +
+      '<td class="rn">' + esc(x.roman) + '</td>' +
+      '<td class="' + (x.outside ? 'out' : '') + '">' + esc(x.note) + '</td></tr>').join('');
+
+    out.innerHTML =
+      '<div class="answer">' +
+        '<p class="keyname">' + esc(keyName(t.tonic, t.mode)) + '</p>' +
+        '<p class="relative">relative ' + relMode + ': ' + esc(keyName(relTonic, relMode)) + '</p>' +
+        (r.capo
+          ? '<p class="relative">capo ' + r.capo + ' — you are fingering ' +
+            esc(keyName(mod12(t.tonic - r.capo), t.mode)) + ' shapes</p>'
+          : '') +
+        (r.picked ? '<p class="relative">your pick — the evidence points to ' +
+                    esc(keyName(base.top.tonic, base.top.mode)) + '</p>' : '') +
+        '<div class="conf">' +
+          '<div class="bar"><span style="width:' + pct + '%"></span></div>' +
+          '<p class="conf-text"><b>' + pct + '%</b> — ' + word + '</p>' +
+        '</div>' +
+        '<p class="why' + (r.ambiguous ? ' ambiguous' : '') + '">' + esc(r.explanation) + '</p>' +
+        '<p class="alts-label">Possible keys</p>' +
+        '<ul class="alts">' + alts + '</ul>' +
+        '<div class="details">' +
+          '<h2>Circle of fifths</h2>' +
+          circleSvg(t) +
+          '<ul class="legend">' +
+            '<li><b>Shaded wedge</b> — the six chords in the key.</li>' +
+            '<li><b>One step round</b> — subdominant anticlockwise, dominant clockwise.</li>' +
+            '<li><b>Inner ring</b> — each major\'s relative minor.</li>' +
+            '<li><b>Outer band only</b> — a diminished degree, at its root note.</li>' +
+            '<li><b>Dashed wedge</b> — the parallel key and its degrees, to borrow from.</li>' +
+          '</ul>' +
+          '<h2>How each chord functions</h2>' +
+          '<div class="tablewrap"><table>' +
+            '<thead><tr><th>Chord</th><th>Function</th><th>Origin</th></tr></thead>' +
+            '<tbody>' + rows + '</tbody>' +
+          '</table></div>' +
+          '<h2>Chords in this key</h2>' +
+          '<div class="grades">' + grades + '</div>' +
+          (t.mode === 'minor'
+            ? '<p class="legend">The dashed pair raise the seventh degree. They come from the ' +
+              'harmonic minor, and they are how a minor key gets a true dominant.</p>'
+            : '') +
+          '<h2>Harmonic function</h2>' +
+          '<div class="tablewrap"><table>' +
+            '<thead><tr><th>Function</th><th>Degrees</th><th>Chords</th></tr></thead>' +
+            '<tbody>' + funcs + '</tbody>' +
+          '</table></div>' +
+          '<p class="legend">Subdominant chords lead away from the tonic, dominant chords ' +
+            'pull back to it. That tension and release is what makes a key feel like a key.</p>' +
+          '<h2>Modes</h2>' +
+          '<div class="tablewrap"><table>' +
+            '<thead><tr><th>Root</th><th>Mode</th><th>Notes</th></tr></thead>' +
+            '<tbody>' + modes + '</tbody>' +
+          '</table></div>' +
+          '<p class="legend">Darker to brighter</p>' +
+          '<ul class="bright">' + bright + '</ul>' +
+        '</div>' +
+      '</div>';
+  }
+
+  /* Picking an alternative key re-reads the whole page against it; changing the
+     chords or the capo hands the choice back to the analysis. */
+  let chosen = null, latest = null;
+
+  out.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-tonic]');
+    if (!b || !latest) return;
+    chosen = { tonic: Number(b.dataset.tonic), mode: b.dataset.mode };
+    render(latest);
+  });
+
+  function run() {
+    chosen = null;
+    latest = analyze(input.value, capoValue());
+    renderChips(latest.parsed, latest.capo);
+    render(latest);
+  }
+
+  let timer;
+  const debounced = () => { clearTimeout(timer); timer = setTimeout(run, 200); };
+  input.addEventListener('input', debounced);
+  capoIn.addEventListener('input', debounced);
+
+  run();
+
+  selfTest((lines, pass, total) => {
+    console.group('Fifthtonic self-test — ' + pass + '/' + total);
+    lines.forEach(l => (l.startsWith('FAIL') ? console.error(l) : console.log(l)));
+    console.groupEnd();
+  });
+})();
+</script>
+</body>
+</html>
