@@ -53,9 +53,9 @@ The answer updates as you type.
   of C major); a full diminished seventh belongs only on a minor key's raised
   seventh.
 - **Scale steps** — the key's own scale written as the gaps between its notes,
-  `C T D T E ½ F …`, over a comparison of the four patterns spelled from that
-  same tonic: major, natural, harmonic and melodic minor. The harmonic minor's
-  `1½` is the augmented second between its flat sixth and raised seventh.
+  `C T D T E ½ F …`, over the four scales spelled from that same tonic: major,
+  natural, harmonic and melodic minor. One starting note, four sets of gaps, and
+  the flat third, sixth and seventh appear as you read down.
 - **Modes** built on each degree, each with the one degree that gives it its
   colour, ordered darkest to brightest.
 
