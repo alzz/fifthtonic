@@ -1463,14 +1463,18 @@ if (typeof module !== 'undefined' && module.exports) {
             '<circle class="ring" cx="' + CX + '" cy="' + CY + '" r="' + R_RIM + '"/>' +
             '<circle class="ring" cx="' + CX + '" cy="' + CY + '" r="' + R_DIV1 + '"/>' +
             '<circle class="ring" cx="' + CX + '" cy="' + CY + '" r="' + R_DIV2 + '"/>' +
-            '<circle class="ring" cx="' + CX + '" cy="' + CY + '" r="' + R_HUB + '"/>' +
-            '<path class="region-outline" d="' + wedge(parallel * 30) + '"/>';
+            '<circle class="ring" cx="' + CX + '" cy="' + CY + '" r="' + R_HUB + '"/>';
 
     for (let i = 0; i < 12; i++) {
       const [x1, y1] = at(i * 30 + 15, R_HUB), [x2, y2] = at(i * 30 + 15, R_RIM);
       g += '<line class="spoke" x1="' + n(x1) + '" y1="' + n(y1) +
            '" x2="' + n(x2) + '" y2="' + n(y2) + '"/>';
     }
+
+    /* After the spokes, not before them. The parallel wedge's straight edges lie
+       exactly along two spokes, so drawn first its dashes are painted over by
+       them and only the curved parts of the outline survive. */
+    g += '<path class="region-outline" d="' + wedge(parallel * 30) + '"/>';
 
     spokes.forEach((sp, i) => {
       const [mx, my] = at(sp.angle, R_MAJ);
