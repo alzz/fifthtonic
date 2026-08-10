@@ -238,6 +238,16 @@ h1 {
    note taller, not a different chord. */
 .dc .sev { display: block; font-size: .76rem; color: var(--muted); margin-top: .15rem; }
 .dc.extra { border-style: dashed; }
+/* Says which scale the tile came from, so the two chords on a minor key's fifth
+   degree do not read as the same chord listed twice. */
+.dc .tag {
+  display: block;
+  margin-top: .3rem;
+  font: .6rem/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--muted);
+}
 
 /* ---- scale steps */
 .patterns { width: auto; }
@@ -1637,6 +1647,7 @@ if (typeof module !== 'undefined' && module.exports) {
         '<span class="num">' + esc(d.roman) + '</span>' +
         '<span class="nm">' + esc(d.name) + '</span>' +
         '<span class="sev">' + esc(d.name7) + '</span>' +
+        (d.extra ? '<span class="tag">harmonic</span>' : '') +
       '</div>').join('');
 
     /* The four scales spelled from the key's own tonic, each with its steps. The
