@@ -174,9 +174,7 @@ h1 {
 .relative { color: var(--muted); font-size: .9rem; margin: .35rem 0 0; }
 
 .conf { margin-top: 1.5rem; }
-.bar { height: 3px; background: var(--hairline); border-radius: 2px; overflow: hidden; }
-.bar > span { display: block; height: 100%; background: var(--accent); }
-.conf-text { font-size: .85rem; color: var(--muted); margin-top: .45rem; }
+.conf-text { font-size: .85rem; color: var(--muted); margin: 0; }
 .conf-text b { color: var(--fg); font-weight: 600; }
 
 .why { margin: 1.25rem 0 0; }
@@ -1344,7 +1342,6 @@ if (typeof module !== 'undefined' && module.exports) {
         (r.picked ? '<p class="relative">your pick — the evidence points to ' +
                     esc(keyName(base.top.tonic, base.top.mode)) + '</p>' : '') +
         '<div class="conf">' +
-          '<div class="bar"><span style="width:' + pct + '%"></span></div>' +
           '<p class="conf-text"><b>' + pct + '%</b> — ' + word + '</p>' +
         '</div>' +
         '<p class="why' + (r.ambiguous ? ' ambiguous' : '') + '">' + esc(r.explanation) + '</p>' +
