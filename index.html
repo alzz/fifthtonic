@@ -240,23 +240,6 @@ h1 {
 .dc.extra { border-style: dashed; }
 
 /* ---- scale steps */
-/* Notes and gaps alternating, so the distance you read sits between the two
-   notes it separates. Wraps on a narrow screen without splitting a pair. */
-.steps {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: .1rem .3rem;
-  margin: .5rem 0 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-.steps .n { font-size: 1rem; font-weight: 600; }
-.steps .s {
-  font-size: .72rem;
-  color: var(--accent);
-  padding: 0 .1rem;
-  font-variant-numeric: tabular-nums;
-}
 .patterns { width: auto; }
 .patterns td.pat { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 /* One fixed-width cell per step, so the seven positions line up as columns down
@@ -1656,14 +1639,10 @@ if (typeof module !== 'undefined' && module.exports) {
         '<span class="sev">' + esc(d.name7) + '</span>' +
       '</div>').join('');
 
-    /* The key's own scale, then the four patterns behind it. The current one is
-       marked, so the concrete row above and the abstract row below are visibly
-       the same thing. */
+    /* The four scales spelled from the key's own tonic, each with its steps. The
+       key's own scale is one of the four, marked, so it needs no separate row of
+       its own above the table. */
     const keyRoot = (t.mode === 'major' ? MAJOR_KEY_NAMES : MINOR_KEY_NAMES)[t.tonic];
-    const sc = scaleSteps(keyRoot, t.mode === 'major' ? MAJOR_SCALE : NAT_MINOR);
-    const stepRow = sc.notes.map((nm, i) =>
-      '<span class="n">' + esc(nm) + '</span>' +
-      (i < sc.steps.length ? '<span class="s">' + esc(sc.steps[i]) + '</span>' : '')).join('');
     const ownPattern = t.mode === 'major' ? 'major' : 'natural minor';
     const patterns = scalePatterns(keyRoot).map(p =>
       '<tr' + (p.name === ownPattern ? ' class="own"' : '') + '>' +
@@ -1761,7 +1740,6 @@ if (typeof module !== 'undefined' && module.exports) {
               'only place a full diminished seventh belongs.</p>'
             : '') +
           '<h2>Scale steps</h2>' +
-          '<div class="steps">' + stepRow + '</div>' +
           '<div class="tablewrap"><table class="patterns">' +
             '<tbody>' + patterns + '</tbody>' +
           '</table></div>' +

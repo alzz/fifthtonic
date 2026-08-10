@@ -52,10 +52,11 @@ The answer updates as you type.
   diminished triad the diatonic seventh is half diminished (`Bm7b5`, the `viiø7`
   of C major); a full diminished seventh belongs only on a minor key's raised
   seventh.
-- **Scale steps** — the key's own scale written as the gaps between its notes,
-  `C T D T E ½ F …`, over a comparison of the four patterns spelled from that
-  same tonic: major, natural, harmonic and melodic minor. The harmonic minor's
-  `1½` is the augmented second between its flat sixth and raised seventh.
+- **Scale steps** — four scales spelled from the key's own tonic, each with the
+  gaps between its notes: major `T T ½ T T T ½`, then natural, harmonic and
+  melodic minor. One starting note, four sets of gaps, and the flat third, sixth
+  and seventh appear as you read down. The harmonic minor's `1½` is the augmented
+  second between its flat sixth and raised seventh.
 - **Modes** built on each degree, each with the one degree that gives it its
   colour, ordered darkest to brightest.
 
