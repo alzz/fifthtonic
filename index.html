@@ -269,9 +269,10 @@ h1 {
 .cadences .gloss { color: var(--muted); }
 
 /* ---- circle of fifths */
-/* Drawn at 380 and capped there: three rings of type do not survive being
-   scaled down, and the innermost is the smallest to begin with. */
-.cof { display: block; width: 100%; max-width: 380px; height: auto; margin: .4rem auto 0; }
+/* Fills the column. Drawn at 380 but uncapped: scaling a vector up costs
+   nothing and the three rings of type only get more legible, whereas scaling
+   down was what made the innermost ring unreadable. */
+.cof { display: block; width: 100%; height: auto; margin: .4rem auto 0; }
 .cof .ring, .cof .spoke { fill: none; stroke: var(--hairline); stroke-width: 1; }
 .cof text {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
