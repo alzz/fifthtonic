@@ -2,10 +2,14 @@
 
 Type a chord progression, find out what key it is in.
 
+**[alzz.github.io/fifthtonic](https://alzz.github.io/fifthtonic/)**
+
 A single self-contained HTML page. No build step, no dependencies, no network
 requests — open `index.html` in a browser and it works.
 
 ## Usage
+
+Use the [hosted page](https://alzz.github.io/fifthtonic/), or run it locally:
 
 ```
 git clone git@github.com:alzz/fifthtonic.git
@@ -123,6 +127,18 @@ process.exit(mod.exports.selfTest((l,p,t)=>{l.forEach(x=>console.log(x));console
 
 Add cases to `selfTest()` in the theory block as `['C G Am F', 'C major']`, or
 `['G C D G', 'Bb major', 3]` to test with a capo.
+
+## Hosting
+
+Served by GitHub Pages straight from `main`, no build and no workflow: the whole
+app is one file at the repository root, so pushing to `main` is the deploy.
+
+Settings → Pages → Source **Deploy from a branch**, branch `main`, folder
+`/ (root)`.
+
+`.nojekyll` turns off the Jekyll build. Nothing here needs it, and without the
+file a `{{` or `{%` inside the page's JavaScript would one day be read as a
+Liquid tag and quietly mangled.
 
 ## License
 
