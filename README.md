@@ -25,7 +25,11 @@ The answer updates as you type.
 
 ## What it tells you
 
-- **The key**, with a confidence percentage and a plain-language reason.
+- **The key**, with its signature, a confidence percentage and a plain-language
+  reason.
+- **A modal reading**, when the notes played spell a mode rather than the plain
+  major or minor — `G F C G` is G Mixolydian, `Am D G Am` is A Dorian — with the
+  characteristic degree that names it and the signature that mode actually needs.
 - **Possible keys** — the runners-up, as a row of buttons. Click one and the
   whole page is re-read against it; the detected key stays tagged so you can
   get back.
@@ -34,11 +38,18 @@ The answer updates as you type.
   key's seven chords are shaded, their scale degrees marked, and the parallel key
   outlined in dashes.
 - **How each chord functions** — a Roman-numeral analysis of what you typed,
-  including secondary dominants (`D7` in C major reads `V7/V`) and borrowed
-  chords.
-- **Chords in this key** and **harmonic function** — every diatonic triad
-  grouped as tonic, subdominant, dominant.
-- **Modes** built on each degree, ordered darkest to brightest.
+  including secondary dominants (`D7` in C major reads `V7/V`), borrowed chords,
+  and figured-bass inversions (`C/E` reads `I⁶`, `G7/F` reads `V7⁴₂`).
+- **Cadences** — the perfect, plagal, interrupted and half closes in what you
+  typed, named and explained. A cadence is a pair of chords, and it is what
+  establishes a key in the first place.
+- **Chords in this key** and **harmonic function** — every diatonic triad with
+  the seventh chord above it, grouped as tonic, subdominant, dominant. Over a
+  diminished triad the diatonic seventh is half diminished (`Bm7b5`, the `viiø7`
+  of C major); a full diminished seventh belongs only on a minor key's raised
+  seventh.
+- **Modes** built on each degree, each with the one degree that gives it its
+  colour, ordered darkest to brightest.
 
 ## Capo
 
@@ -90,13 +101,13 @@ ambiguous. The app says so rather than manufacturing confidence.
 ## Development
 
 The music theory lives in a pure module — `parseChord`, `scoreKey`, `analyze`,
-`diatonicChords`, `modesOfKey` and friends — with no DOM access. The UI layer
-only calls `analyze()` and renders the result.
+`diatonicChords`, `cadences`, `modalReading`, `modesOfKey` and friends — with no
+DOM access. The UI layer only calls `analyze()` and renders the result.
 
 A self-test runs on page load and reports to the console:
 
 ```
-Fifthtonic self-test — 19/19
+Fifthtonic self-test — 25/25
 ```
 
 To run the same tests headlessly:

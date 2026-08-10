@@ -172,6 +172,7 @@ h1 {
   margin: 0;
 }
 .relative { color: var(--muted); font-size: .9rem; margin: .35rem 0 0; }
+.relative b { color: var(--fg); font-weight: 600; }
 
 .conf { margin-top: 1.5rem; }
 .conf-text { font-size: .85rem; color: var(--muted); margin: 0; }
@@ -233,7 +234,20 @@ h1 {
 }
 .dc .num { display: block; font-size: .72rem; color: var(--muted); }
 .dc .nm  { display: block; font-size: .98rem; font-weight: 600; margin-top: .1rem; }
+/* The seventh sits under the triad it is built on, quieter: the same chord one
+   note taller, not a different chord. */
+.dc .sev { display: block; font-size: .76rem; color: var(--muted); margin-top: .15rem; }
 .dc.extra { border-style: dashed; }
+
+/* ---- cadences */
+.cadences { list-style: none; padding: 0; margin: .5rem 0 0; }
+.cadences li { margin-top: .5rem; font-size: .88rem; }
+.cadences .move {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 600;
+}
+.cadences .kind { color: var(--accent); }
+.cadences .gloss { color: var(--muted); }
 
 /* ---- circle of fifths */
 /* Drawn at 380 and capped there: three rings of type do not survive being
@@ -442,7 +456,7 @@ function parseSuffix(s) {
   else eat(/^(maj|Maj|M)(?![A-Za-z0-9])/);
 
   /* --- sixth / seventh / extension */
-  if (eat(/^6/)) { sixth = true; if (eat(/^\/?9/)) adds.push(2); }
+  if (eat(/^6/)) { sixth = true; if (eat(/^\/?9/)) adds.push({ iv: 2, deg: 9 }); }
   else {
     const num = eat(/^(13|11|9|7)/);
     if (num) {
@@ -512,8 +526,13 @@ function parseChord(token) {
   const raw = token.trim();
   if (!raw) return null;
   let body = raw, bassStr = null;
+  /* A slash means a bass note only when a note follows it. C6/9 is one chord
+     name, not C6 over a bass of 9. */
   const slash = raw.indexOf('/');
-  if (slash > 0) { body = raw.slice(0, slash); bassStr = raw.slice(slash + 1); }
+  if (slash > 0 && /^[A-Ga-g]/.test(raw.slice(slash + 1))) {
+    body = raw.slice(0, slash);
+    bassStr = raw.slice(slash + 1);
+  }
 
   const root = parseRoot(body);
   if (!root) return { raw, error: 'no recognisable root note' };
@@ -605,6 +624,9 @@ function respellChord(ch, spell) {
 function isDominant(ch)  { return ch.seventh === 10 && ch.quality === 'major' && !ch.sus; }
 function isMajorish(ch)  { return ch.quality === 'major' && !ch.sus; }
 function isMinorish(ch)  { return ch.quality === 'minor'; }
+/* 7sus4 is a dominant by function and by ear, but it has no third, so it carries
+   neither leading tone nor tritone. Worth counting, worth less than a real V7. */
+function isSusDominant(ch) { return ch.seventh === 10 && ch.sus === 4; }
 
 function scoreKey(chords, tonic, mode) {
   const allowed = new Set((mode === 'major' ? MAJOR_SCALE : MINOR_UNION).map(x => mod12(tonic + x)));
@@ -644,6 +666,7 @@ function scoreKey(chords, tonic, mode) {
        a key has: it contains both the leading tone and the tritone that only
        resolves one way. */
     if (deg === 7 && isDominant(ch)) { score += 3.0; reasons.push({ kind: 'V7', chord: ch }); }
+    else if (deg === 7 && isSusDominant(ch)) { score += 2.0; reasons.push({ kind: 'V7sus', chord: ch }); }
     else if (deg === 7 && isMajorish(ch)) {
       score += mode === 'major' ? 1.0 : 1.8;              // in minor this is the raised leading tone
       reasons.push({ kind: 'V', chord: ch });
@@ -717,6 +740,8 @@ function analyze(input, capo) {
     top,
     ambiguous,
     romans: romanAnalysis(chords, top.tonic, top.mode),
+    cadences: cadences(chords, top.tonic, top.mode),
+    modal: modalReading(chords, top.tonic, top.mode),
     explanation: explain(chords, top, candidates[1], ambiguous)
   };
 }
@@ -774,9 +799,31 @@ const MAJOR_DEGREE_RN = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
 const MINOR_DEGREE_RN = ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII'];
 const HARM_MINOR = [0,2,3,5,7,8,11];
 
-/* Every triad the key builds on its own scale, spelled properly and named by
-   degree. Qualities are derived from the scale rather than hardcoded, so the
-   same code serves major and minor. */
+/* Triad suffix and seventh-chord suffix for one stack of thirds, from the
+   intervals alone. The seventh is where the diminished family splits: a half
+   diminished (m7b5) has a minor seventh over the flat fifth and is what the vii
+   of a major key really is; a full diminished seventh stacks another minor third
+   and only occurs on the raised seventh of a minor key. */
+function stackNames(third, fifth, seventh) {
+  let triad = '', sev = '';
+  if (third === 3 && fifth === 6) { triad = 'dim'; sev = seventh === 9 ? 'dim7' : 'm7b5'; }
+  else if (third === 3)           { triad = 'm';   sev = seventh === 11 ? 'mmaj7' : 'm7'; }
+  else if (fifth === 8)           { triad = 'aug'; sev = seventh === 11 ? 'maj7#5' : '7#5'; }
+  else                            { triad = '';    sev = seventh === 11 ? 'maj7' : '7'; }
+  return { triad, sev };
+}
+
+/* Roman-numeral figure for the seventh, matching stackNames. */
+function stackFigure(third, fifth, seventh) {
+  if (third === 3 && fifth === 6) return seventh === 9 ? '°7' : 'ø7';
+  if (third === 3)                return seventh === 11 ? 'maj7' : '7';
+  if (fifth === 8)                return seventh === 11 ? 'maj7' : '7';
+  return seventh === 11 ? 'maj7' : '7';
+}
+
+/* Every chord the key builds on its own scale, spelled properly and named by
+   degree — the triad and the seventh above it. Qualities are derived from the
+   scale rather than hardcoded, so the same code serves major and minor. */
 function diatonicChords(tonic, mode) {
   const keyRoot = (mode === 'major' ? MAJOR_KEY_NAMES : MINOR_KEY_NAMES)[tonic];
   const steps = mode === 'major' ? MAJOR_SCALE : NAT_MINOR;
@@ -786,21 +833,26 @@ function diatonicChords(tonic, mode) {
   const out = [];
   for (let i = 0; i < 7; i++) {
     const root = mod12(tonic + steps[i]);
-    const third = mod12(mod12(tonic + steps[(i + 2) % 7]) - root);
-    const fifth = mod12(mod12(tonic + steps[(i + 4) % 7]) - root);
-    let sfx = '';
-    if (third === 3 && fifth === 6) sfx = 'dim';
-    else if (third === 3) sfx = 'm';
-    else if (fifth === 8) sfx = 'aug';
-    out.push({ roman: rns[i], name: names[i] + sfx, rootPc: root, extra: false });
+    const third   = mod12(mod12(tonic + steps[(i + 2) % 7]) - root);
+    const fifth   = mod12(mod12(tonic + steps[(i + 4) % 7]) - root);
+    const seventh = mod12(mod12(tonic + steps[(i + 6) % 7]) - root);
+    const s = stackNames(third, fifth, seventh);
+    out.push({
+      roman: rns[i], name: names[i] + s.triad, rootPc: root, extra: false,
+      roman7: rns[i].replace('°', '') + stackFigure(third, fifth, seventh),
+      name7: names[i] + s.sev
+    });
   }
 
   /* A minor key has no real dominant until the seventh degree is raised, and
      nearly all minor-key music does raise it. Show both. */
   if (mode === 'minor') {
     const har = spellScale(keyRoot, HARM_MINOR);
-    out.push({ roman: 'V',    name: har[4],         rootPc: mod12(tonic + 7),  extra: true });
-    out.push({ roman: 'vii°', name: har[6] + 'dim', rootPc: mod12(tonic + 11), extra: true });
+    out.push({ roman: 'V', name: har[4], rootPc: mod12(tonic + 7), extra: true,
+               roman7: 'V7', name7: har[4] + '7' });
+    /* The raised seventh is the one place a full diminished seventh belongs. */
+    out.push({ roman: 'vii°', name: har[6] + 'dim', rootPc: mod12(tonic + 11), extra: true,
+               roman7: 'vii°7', name7: har[6] + 'dim7' });
   }
   return out;
 }
@@ -874,6 +926,37 @@ const MODE_NAMES = ['Ionian', 'Dorian', 'Phrygian', 'Lydian', 'Mixolydian', 'Aeo
    Locrian has the most flattened degrees, Lydian the most raised. */
 const MODE_BRIGHTNESS = ['Locrian', 'Phrygian', 'Aeolian', 'Dorian', 'Mixolydian', 'Ionian', 'Lydian'];
 
+/* Where each mode starts inside its parent major scale, in semitones. A Dorian
+   sits two semitones above G, so G major is the scale it is drawn from — and G
+   major's key signature is the one a player actually needs. */
+const MODE_OFFSET = {
+  Ionian: 0, Dorian: 2, Phrygian: 4, Lydian: 5, Mixolydian: 7, Aeolian: 9, Locrian: 11
+};
+
+const MODE_STEPS = {
+  Ionian:     [0,2,4,5,7,9,11],
+  Dorian:     [0,2,3,5,7,9,10],
+  Phrygian:   [0,1,3,5,7,8,10],
+  Lydian:     [0,2,4,6,7,9,11],
+  Mixolydian: [0,2,4,5,7,9,10],
+  Aeolian:    [0,2,3,5,7,8,10],
+  Locrian:    [0,1,3,5,6,8,10]
+};
+
+/* One note tells you which mode you are in. The bright modes are heard against
+   the major scale, the dark ones against the natural minor, and Ionian and
+   Aeolian are those two references themselves — so they have no colour of their
+   own to name. */
+const MODE_COLOUR = {
+  Ionian:     null,
+  Dorian:     { deg: 6, sym: '♮6', vs: 'minor' },
+  Phrygian:   { deg: 2, sym: '♭2', vs: 'minor' },
+  Lydian:     { deg: 4, sym: '♯4', vs: 'major' },
+  Mixolydian: { deg: 7, sym: '♭7', vs: 'major' },
+  Aeolian:    null,
+  Locrian:    { deg: 5, sym: '♭5', vs: 'minor' }
+};
+
 /* Seven notes, seven modes — the same collection heard from seven different
    home notes. A major key starts on Ionian; a minor key is Aeolian, which is
    the sixth mode, so its degrees are offset by five. */
@@ -881,11 +964,45 @@ function modesOfKey(tonic, mode) {
   const keyRoot = (mode === 'major' ? MAJOR_KEY_NAMES : MINOR_KEY_NAMES)[tonic];
   const names = spellScale(keyRoot, mode === 'major' ? MAJOR_SCALE : NAT_MINOR);
   const offset = mode === 'major' ? 0 : 5;
-  return names.map((root, i) => ({
-    root,
-    mode: MODE_NAMES[(offset + i) % 7],
-    notes: names.slice(i).concat(names.slice(0, i))
-  }));
+  return names.map((root, i) => {
+    const m = MODE_NAMES[(offset + i) % 7];
+    const notes = names.slice(i).concat(names.slice(0, i));
+    const col = MODE_COLOUR[m];
+    return { root, mode: m, notes, colour: col ? col.sym + ' ' + notes[col.deg - 1] : null };
+  });
+}
+
+/* The detected key names a tonic and a mode, but the notes actually played may
+   spell a different mode on that same tonic — G major with every F natural is
+   G Mixolydian, and calling the F a borrowed bVII misses the point.
+
+   Claimed only when some mode accounts for every note and the plain major or
+   minor does not, so C G Am F stays C major and is never made more exotic than
+   it is. Nearest neighbours are tried first: one altered degree before two. */
+function modalReading(chords, tonic, mode) {
+  const used = new Set();
+  chords.forEach(ch => ch.pcs.forEach(p => used.add(mod12(p - tonic))));
+  const home = mode === 'major' ? 'Ionian' : 'Aeolian';
+  const fits = (name) => [...used].every(iv => MODE_STEPS[name].includes(iv));
+  if (fits(home)) return null;
+
+  const order = mode === 'major'
+    ? ['Mixolydian', 'Lydian', 'Dorian', 'Aeolian', 'Phrygian', 'Locrian']
+    : ['Dorian', 'Phrygian', 'Mixolydian', 'Ionian', 'Lydian', 'Locrian'];
+  const found = order.find(fits);
+  if (!found) return null;
+
+  const keyRoot = (mode === 'major' ? MAJOR_KEY_NAMES : MINOR_KEY_NAMES)[tonic];
+  const notes = spellScale(keyRoot, MODE_STEPS[found]);
+  const col = MODE_COLOUR[found];
+  return {
+    mode: found,
+    name: keyRoot + ' ' + found,
+    colour: col ? col.sym + ' (' + notes[col.deg - 1] + ')' : null,
+    /* The mode's own signature, which is not the detected key's: A minor writes
+       no accidentals, A Dorian writes one sharp. */
+    signature: keySignature(mod12(tonic - MODE_OFFSET[found]), 'major')
+  };
 }
 
 /* ---- roman numeral analysis ------------------------------------------- */
@@ -899,13 +1016,36 @@ function chordFigure(ch) {
   else if (ch.quality === 'aug') f += '+';
   else if (ch.quality === 'minor' && ch.fifth === 6 && ch.seventh === 10) f += 'ø7';
   if (!f) {
-    if (ch.sus) f += 'sus' + ch.sus;
-    if (ch.sixth) f += '6';
-    else if (ch.seventh === 11) f += 'maj7';
+    /* Height first, suspension after: a dominant seventh with a suspended fourth
+       is written V7sus4, never Vsus47. */
+    if (ch.sixth) f += ch.tones.some(t => t.deg === 9) ? '6/9' : '6';
+    else if (ch.seventh === 11) f += 'maj' + (ch.ext > 7 ? ch.ext : 7);
     else if (ch.seventh === 10) f += ch.ext > 7 ? String(ch.ext) : '7';
+    if (ch.sus) f += 'sus' + ch.sus;
     if (ch.power) f += '5';
   }
   return f;
+}
+
+/* Figured bass: which member of the chord is underneath it. The numbers are the
+   intervals a continuo player would have read, and they are why a second
+   inversion looks nothing like a first. */
+const INVERSION = {
+  3: { triad: '⁶',  seventh: '⁶₅', name: 'first inversion' },
+  5: { triad: '⁶₄', seventh: '⁴₃', name: 'second inversion' },
+  7: { triad: null, seventh: '⁴₂', name: 'third inversion' }
+};
+
+function inversionOf(ch) {
+  if (!ch.bass || ch.bass.pc === ch.root.pc) return null;
+  const iv = mod12(ch.bass.pc - ch.root.pc);
+  const tone = ch.tones.find(t => mod12(t.iv) === iv);
+  /* A bass note that is not in the chord at all is a pedal or a passing bass,
+     not an inversion. Say so rather than inventing a figure for it. */
+  if (!tone) return { figure: null, name: 'bass outside the chord' };
+  const inv = INVERSION[tone.deg];
+  if (!inv) return { figure: null, name: 'the ' + tone.deg + 'th in the bass' };
+  return { figure: ch.seventh !== null ? inv.seventh : inv.triad, name: inv.name };
 }
 
 function romanAnalysis(chords, tonic, mode) {
@@ -921,23 +1061,79 @@ function romanAnalysis(chords, tonic, mode) {
        numeral letters change — a bIII stays flat when it becomes biii. */
     let rn = map[deg];
     if (minorish) rn = rn.replace(/[IV]+/, m => m.toLowerCase());
+    /* MINOR_RN gives both sevenths the numeral VII, because the leading-tone
+       chord is written vii° with the raise understood. Anything else built on the
+       raised seventh has to say so, or it reads as the natural VII. */
+    if (mode === 'minor' && deg === 11 && ch.quality !== 'dim') rn = '#' + rn;
     rn += chordFigure(ch);
 
     /* A non-diatonic major/dominant chord a fifth above a diatonic degree is a
        secondary dominant, not an anomaly. Label it as such. */
     let note = outside ? 'borrowed' : 'diatonic';
-    if (outside && isMajorish(ch)) {
+    if (outside && (isMajorish(ch) || isSusDominant(ch))) {
       const target = mod12(deg + 5);
       if (targets.includes(target) && target !== deg) {
         const targetMinor = mode === 'major' ? [2,4,9].includes(target) : [0,5,7].includes(target);
         let t = map[target];
         if (targetMinor) t = t.replace(/[IV]+/, m => m.toLowerCase());
-        rn = (isDominant(ch) ? 'V7/' : 'V/') + t;
+        rn = ((isDominant(ch) || isSusDominant(ch)) ? 'V7/' : 'V/') + t;
         note = 'secondary dominant';
       }
     }
-    return { chord: ch, roman: rn, note, outside };
+
+    /* Last, so it survives being relabelled as a secondary dominant. */
+    const inv = inversionOf(ch);
+    if (inv) {
+      if (inv.figure) rn += inv.figure;
+      note += ' · ' + inv.name;
+    }
+    return { chord: ch, roman: rn, note, outside, inversion: inv };
   });
+}
+
+/* ---- cadences ---------------------------------------------------------- */
+
+/* A cadence is a pair of chords, never one: what establishes a key is the motion
+   between them. These five are the ones that carry the weight in tonal music. */
+const CADENCE_GLOSS = {
+  'perfect':       'the dominant resolving home, the strongest close there is',
+  'plagal':        'the subdominant falling home, with no leading tone to push it',
+  'interrupted':   'the dominant turning to the sixth instead of home',
+  'half':          'coming to rest on the dominant, leaving the phrase open',
+  'Phrygian half': 'the minor subdominant stepping down onto the dominant'
+};
+
+function cadences(chords, tonic, mode) {
+  const deg = (ch) => mod12(ch.root.pc - tonic);
+  const home = (ch) => deg(ch) === 0 && (isMajorish(ch) || isMinorish(ch));
+  const dom  = (ch) => deg(ch) === 7 && (isMajorish(ch) || isDominant(ch) || isSusDominant(ch));
+  const out = [];
+
+  for (let i = 1; i < chords.length; i++) {
+    const from = chords[i - 1], to = chords[i];
+    const a = deg(from), b = deg(to);
+    const last = i === chords.length - 1;
+    let name = null;
+
+    if (a === 7 && home(to)) {
+      name = 'perfect';
+      /* The supertonic preparation is what makes a perfect cadence inevitable
+         rather than merely correct. */
+      const two = i >= 2 ? chords[i - 2] : null;
+      if (two && mod12(two.root.pc - tonic) === 2 &&
+          (isMinorish(two) || two.quality === 'dim')) name = 'perfect, prepared by ii';
+    }
+    else if (a === 5 && home(to))                           name = 'plagal';
+    else if (a === 7 && b === (mode === 'major' ? 9 : 8))    name = 'interrupted';
+    else if (mode === 'minor' && a === 5 && dom(to) && last) name = 'Phrygian half';
+    else if (dom(to) && last)                               name = 'half';
+
+    if (name) {
+      out.push({ at: i, name, from: from.raw, to: to.raw,
+                 gloss: CADENCE_GLOSS[name.replace(/,.*$/, '')] });
+    }
+  }
+  return out;
 }
 
 /* ---- plain-language explanation --------------------------------------- */
@@ -946,6 +1142,7 @@ function explain(chords, top, runnerUp, ambiguous) {
   const key = keyName(top.tonic, top.mode);
   const useFlats = (top.mode === 'major' ? MAJOR_KEY_NAMES : MINOR_KEY_NAMES)[top.tonic].includes('b');
   const v7 = top.reasons.find(r => r.kind === 'V7');
+  const v7sus = top.reasons.find(r => r.kind === 'V7sus');
   const vii = top.reasons.find(r => r.kind === 'vii');
   const v = top.reasons.find(r => r.kind === 'V');
   const iivi = top.reasons.find(r => r.kind === 'ii-V-I');
@@ -963,6 +1160,9 @@ function explain(chords, top, runnerUp, ambiguous) {
   } else if (v7) {
     why = v7.chord.raw + ' is the dominant seventh of ' + key + ': it contains ' + lead +
           ', the leading tone, and a tritone that resolves onto ' + tonicNote + '.';
+  } else if (v7sus) {
+    why = v7sus.chord.raw + ' stands on the dominant of ' + key + ': no third, so no ' +
+          'leading tone, but its seventh still pulls home.';
   } else if (v && top.mode === 'minor') {
     why = v.chord.raw + ' raises the seventh degree to ' + lead + ', which only happens in ' + key + '.';
   } else if (last) {
@@ -1001,6 +1201,8 @@ function describe(r, tonic, mode) {
     picked: !isTop,
     ambiguous: isTop && r.ambiguous,
     romans: romanAnalysis(r.chords, t.tonic, t.mode),
+    cadences: cadences(r.chords, t.tonic, t.mode),
+    modal: modalReading(r.chords, t.tonic, t.mode),
     explanation: explain(r.chords, t, r.candidates[1], isTop && r.ambiguous)
   };
 }
@@ -1063,14 +1265,70 @@ function selfTest(report) {
   if (ringOk) pass++;
   lines.push((ringOk ? 'pass' : 'FAIL') + '  diminished ring is vii° / ii°');
 
-  report(lines, pass, cases.length + 2);
-  return pass === cases.length + 2;
+  /* The diminished family splits at the seventh: half diminished on the vii of a
+     major key, fully diminished only on the raised seventh of a minor one. */
+  const cMaj = diatonicChords(0, 'major'), aMin = diatonicChords(9, 'minor');
+  const sevOk = cMaj[6].name7 === 'Bm7b5' && cMaj[6].roman7 === 'viiø7' &&
+                cMaj[4].name7 === 'G7'    && cMaj[0].name7  === 'Cmaj7' &&
+                aMin[1].name7 === 'Bm7b5' && aMin[8].name7  === 'G#dim7' &&
+                aMin[8].roman7 === 'vii°7';
+  if (sevOk) pass++;
+  lines.push((sevOk ? 'pass' : 'FAIL') + '  diatonic sevenths, half vs fully diminished');
+
+  /* Chord names the parser used to choke on or mis-render. */
+  const figCases = [['C6/9', 'C E G A D', '6/9'], ['G7sus4', 'G C D F', '7sus4'],
+                    ['Cmaj9', 'C E G B D', 'maj9'], ['Cm7b5', 'C Eb Gb Bb', 'ø7']];
+  const figOk = figCases.every(([txt, notes, fig]) => {
+    const c = parseChord(txt);
+    return c && !c.error && chordNoteNames(c).join(' ') === notes && chordFigure(c) === fig;
+  });
+  if (figOk) pass++;
+  lines.push((figOk ? 'pass' : 'FAIL') + '  chord spelling and figures');
+
+  /* Inversions must read off the bass, and a bass outside the chord is not one. */
+  const invOk = romanAnalysis([parseChord('C/E')], 0, 'major')[0].roman === 'I⁶' &&
+                romanAnalysis([parseChord('G7/F')], 0, 'major')[0].roman === 'V7⁴₂' &&
+                romanAnalysis([parseChord('C/G')], 0, 'major')[0].roman === 'I⁶₄' &&
+                inversionOf(parseChord('C/D')).figure === null;
+  if (invOk) pass++;
+  lines.push((invOk ? 'pass' : 'FAIL') + '  figured-bass inversions');
+
+  /* A cadence needs the right pair in the right place. */
+  const cadOf = (s) => { const r = analyze(s); return r.cadences.map(c => c.name).join('|'); };
+  const cadOk = cadOf('Dm G C') === 'perfect, prepared by ii' &&
+                cadOf('C F C')  === 'plagal' &&
+                cadOf('C G Am') === 'interrupted' &&
+                cadOf('C Dm G') === 'half' &&
+                cadOf('Am Dm E') === 'Phrygian half';
+  if (cadOk) pass++;
+  lines.push((cadOk ? 'pass' : 'FAIL') + '  cadences named');
+
+  /* A mode is claimed only when the plain major or minor cannot account for the
+     notes — and never for music that is simply diatonic. */
+  const modOf = (s) => { const r = analyze(s); return r.modal ? r.modal.name : null; };
+  const modOk = modOf('G F C G') === 'G Mixolydian' &&
+                modOf('Am D G Am') === 'A Dorian' &&
+                modOf('C G Am F') === null &&
+                modOf('Am Dm E7 Am') === null;
+  if (modOk) pass++;
+  lines.push((modOk ? 'pass' : 'FAIL') + '  modal reading');
+
+  /* The signature belongs to the relative major, not the letter of the tonic. */
+  const sigOk = keySignature(3, 'minor').text === '6 flats' &&
+                keySignature(10, 'major').notes.join(' ') === 'Bb Eb' &&
+                keySignature(0, 'major').count === 0;
+  if (sigOk) pass++;
+  lines.push((sigOk ? 'pass' : 'FAIL') + '  key signatures');
+
+  report(lines, pass, cases.length + 8);
+  return pass === cases.length + 8;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { analyze, keyName, shortKeyName, selfTest, parseChord, chordNoteNames, transposeChord,
                      spellScale, keySignature, diatonicChords, harmonicFunctions,
-                     circleOfFifths, describe, modesOfKey, MODE_BRIGHTNESS };
+                     circleOfFifths, describe, modesOfKey, MODE_BRIGHTNESS,
+                     cadences, modalReading, inversionOf, chordFigure };
 }
 </script>
 
@@ -1291,6 +1549,7 @@ if (typeof module !== 'undefined' && module.exports) {
     const word = confidenceWord(t.confidence, r.ambiguous);
     const relTonic = t.mode === 'major' ? mod12(t.tonic + 9) : mod12(t.tonic + 3);
     const relMode = t.mode === 'major' ? 'minor' : 'major';
+    const sig = keySignature(t.tonic, t.mode);
     const alts = r.candidates.filter(c => c !== t).slice(0, 4).map(c =>
       '<li><button type="button" data-tonic="' + c.tonic + '" data-mode="' + c.mode +
         '" title="' + esc(keyName(c.tonic, c.mode)) + '">' +
@@ -1303,7 +1562,13 @@ if (typeof module !== 'undefined' && module.exports) {
       '<div class="dc' + (d.extra ? ' extra' : '') + '">' +
         '<span class="num">' + esc(d.roman) + '</span>' +
         '<span class="nm">' + esc(d.name) + '</span>' +
+        '<span class="sev">' + esc(d.name7) + '</span>' +
       '</div>').join('');
+
+    const cads = r.cadences.map(c =>
+      '<li><span class="move">' + esc(c.from) + ' → ' + esc(c.to) + '</span>' +
+        ' — <span class="kind">' + esc(c.name) + '</span>' +
+        ' <span class="gloss">· ' + esc(c.gloss) + '</span></li>').join('');
 
     const funcs = harmonicFunctions(t.tonic, t.mode).map(g =>
       '<tr><td>' + esc(g.name) + '</td>' +
@@ -1314,6 +1579,7 @@ if (typeof module !== 'undefined' && module.exports) {
       '<tr' + (i === 0 ? ' class="tonic"' : '') + '>' +
         '<td class="sym">' + esc(m.root) + '</td>' +
         '<td>' + esc(m.mode) + '</td>' +
+        '<td class="sym">' + esc(m.colour || '—') + '</td>' +
         '<td class="sym">' + esc(m.notes.join(' ')) + '</td>' +
       '</tr>').join('');
 
@@ -1334,7 +1600,16 @@ if (typeof module !== 'undefined' && module.exports) {
     out.innerHTML =
       '<div class="answer">' +
         '<p class="keyname">' + esc(keyName(t.tonic, t.mode)) + '</p>' +
+        '<p class="relative">' + esc(sig.notes.length ? sig.text + ' — ' + sig.notes.join(' ')
+                                                     : sig.text) + '</p>' +
         '<p class="relative">relative ' + relMode + ': ' + esc(keyName(relTonic, relMode)) + '</p>' +
+        /* Only when the notes played spell a mode that the plain major or minor
+           cannot account for — otherwise the key name already said it. */
+        (r.modal
+          ? '<p class="relative">these notes spell <b>' + esc(r.modal.name) + '</b>' +
+            (r.modal.colour ? ' — ' + esc(r.modal.colour) : '') +
+            ' · ' + esc(r.modal.signature.text) + '</p>'
+          : '') +
         (r.capo
           ? '<p class="relative">capo ' + r.capo + ' — you are fingering ' +
             esc(keyName(mod12(t.tonic - r.capo), t.mode)) + ' shapes</p>'
@@ -1366,11 +1641,19 @@ if (typeof module !== 'undefined' && module.exports) {
             '<thead><tr><th>Chord</th><th>Function</th><th>Origin</th></tr></thead>' +
             '<tbody>' + rows + '</tbody>' +
           '</table></div>' +
+          (cads
+            ? '<h2>Cadences</h2>' +
+              '<ul class="cadences">' + cads + '</ul>'
+            : '') +
           '<h2>Chords in this key</h2>' +
           '<div class="grades">' + grades + '</div>' +
+          '<p class="legend">The quieter name under each is the same degree as a seventh ' +
+            'chord. Note the ' + (t.mode === 'major' ? 'vii' : 'ii') + ': over a diminished ' +
+            'triad the diatonic seventh is half diminished, not a diminished seventh.</p>' +
           (t.mode === 'minor'
             ? '<p class="legend">The dashed pair raise the seventh degree. They come from the ' +
-              'harmonic minor, and they are how a minor key gets a true dominant.</p>'
+              'harmonic minor, and they are how a minor key gets a true dominant — and the ' +
+              'only place a full diminished seventh belongs.</p>'
             : '') +
           '<h2>Harmonic function</h2>' +
           '<div class="tablewrap"><table>' +
@@ -1381,9 +1664,12 @@ if (typeof module !== 'undefined' && module.exports) {
             'pull back to it. That tension and release is what makes a key feel like a key.</p>' +
           '<h2>Modes</h2>' +
           '<div class="tablewrap"><table>' +
-            '<thead><tr><th>Root</th><th>Mode</th><th>Notes</th></tr></thead>' +
+            '<thead><tr><th>Root</th><th>Mode</th><th>Colour</th><th>Notes</th></tr></thead>' +
             '<tbody>' + modes + '</tbody>' +
           '</table></div>' +
+          '<p class="legend">The colour is the one degree that names the mode — the bright ' +
+            'modes heard against the major scale, the dark ones against the natural minor. ' +
+            'Ionian and Aeolian are those two references, so they have none.</p>' +
           '<p class="legend">Darker to brighter</p>' +
           '<ul class="bright">' + bright + '</ul>' +
         '</div>' +
