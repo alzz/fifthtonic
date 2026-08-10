@@ -257,9 +257,12 @@ h1 {
   padding: 0 .1rem;
   font-variant-numeric: tabular-nums;
 }
-/* The steps are already written into the row of notes above; here the four
-   scales only need their notes, read down the same tonic. */
 .patterns { width: auto; }
+.patterns td.pat { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+/* One fixed-width cell per step, so the seven positions line up as columns down
+   the table. Comparing the patterns is the whole reason they are stacked, and
+   the wider 1½ would otherwise shift every symbol after it out of line. */
+.patterns td.pat span { display: inline-block; width: 1.45em; text-align: center; }
 .patterns tr.own td { color: var(--accent); font-weight: 600; }
 
 /* ---- cadences */
@@ -1665,6 +1668,8 @@ if (typeof module !== 'undefined' && module.exports) {
     const patterns = scalePatterns(keyRoot).map(p =>
       '<tr' + (p.name === ownPattern ? ' class="own"' : '') + '>' +
         '<td>' + esc(p.name) + '</td>' +
+        '<td class="pat">' +
+          p.steps.map(s => '<span>' + esc(s) + '</span>').join('') + '</td>' +
         '<td class="sym">' + esc(p.notes.join(' ')) + '</td>' +
       '</tr>').join('');
 
@@ -1761,9 +1766,9 @@ if (typeof module !== 'undefined' && module.exports) {
             '<tbody>' + patterns + '</tbody>' +
           '</table></div>' +
           (t.mode === 'minor'
-            ? '<p class="legend">Between the flat sixth and raised seventh of the harmonic ' +
-              'minor sits an augmented second — a tone and a half, the widest step in any ' +
-              'of these scales, and the sound of the mode.</p>'
+            ? '<p class="legend">The harmonic minor\'s 1½ is an augmented second, the ' +
+              'outsized gap between its flat sixth and raised seventh. That step is the ' +
+              'sound of the mode.</p>'
             : '') +
           '<h2>Harmonic function</h2>' +
           '<div class="tablewrap"><table>' +
