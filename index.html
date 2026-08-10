@@ -239,6 +239,32 @@ h1 {
 .dc .sev { display: block; font-size: .76rem; color: var(--muted); margin-top: .15rem; }
 .dc.extra { border-style: dashed; }
 
+/* ---- scale steps */
+/* Notes and gaps alternating, so the distance you read sits between the two
+   notes it separates. Wraps on a narrow screen without splitting a pair. */
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .1rem .3rem;
+  margin: .5rem 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.steps .n { font-size: 1rem; font-weight: 600; }
+.steps .s {
+  font-size: .72rem;
+  color: var(--accent);
+  padding: 0 .1rem;
+  font-variant-numeric: tabular-nums;
+}
+.patterns { width: auto; }
+.patterns td.pat { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+/* One fixed-width cell per step, so the seven positions line up as columns down
+   the table. Comparing the patterns is the whole reason they are stacked, and
+   the wider 1½ would otherwise shift every symbol after it out of line. */
+.patterns td.pat span { display: inline-block; width: 1.45em; text-align: center; }
+.patterns tr.own td { color: var(--accent); font-weight: 600; }
+
 /* ---- cadences */
 .cadences { list-style: none; padding: 0; margin: .5rem 0 0; }
 .cadences li { margin-top: .5rem; font-size: .88rem; }
@@ -793,6 +819,42 @@ function keySignature(tonic, mode) {
   return { count: n, text: Math.abs(n) + ' ' + word, notes };
 }
 
+/* ---- scale steps ------------------------------------------------------- */
+
+/* A scale is its gaps, not its notes: the same T T ½ T T T ½ starting anywhere
+   gives a major scale. Written as it is taught — T for a whole tone, ½ for a
+   semitone. The tone-and-a-half only turns up in the harmonic minor, between the
+   flat sixth and the raised seventh, and that outsized gap is exactly what makes
+   it sound the way it does. */
+const STEP_SYMBOL = { 1: '½', 2: 'T', 3: '1½' };
+
+const MELODIC_MINOR = [0,2,3,5,7,9,11];
+
+function scaleSteps(tonicName, intervals) {
+  const notes = spellScale(tonicName, intervals);
+  /* The last gap closes the octave, so it is measured against 12, not against a
+     note the list does not contain. */
+  const steps = intervals.map((iv, i) =>
+    STEP_SYMBOL[(i === intervals.length - 1 ? 12 : intervals[i + 1]) - iv]);
+  return { notes: notes.concat(notes[0]), steps };
+}
+
+/* The four patterns worth having side by side: one major, and the three forms a
+   minor key moves between. All spelled from the same tonic, which is the point —
+   one starting note, four sets of gaps, four scales. Remote keys pay for that
+   honestly: Db minor really does need a Bbb. */
+function scalePatterns(tonicName) {
+  return [
+    { name: 'major',          intervals: MAJOR_SCALE },
+    { name: 'natural minor',  intervals: NAT_MINOR },
+    { name: 'harmonic minor', intervals: HARM_MINOR },
+    { name: 'melodic minor',  intervals: MELODIC_MINOR }
+  ].map(p => {
+    const s = scaleSteps(tonicName, p.intervals);
+    return { name: p.name, steps: s.steps, notes: s.notes.slice(0, 7) };
+  });
+}
+
 /* ---- the diatonic chords of a key ------------------------------------- */
 
 const MAJOR_DEGREE_RN = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
@@ -1313,6 +1375,30 @@ function selfTest(report) {
   if (modOk) pass++;
   lines.push((modOk ? 'pass' : 'FAIL') + '  modal reading');
 
+  /* A scale is its gaps. The harmonic minor's augmented second is the one step
+     wider than a tone anywhere in the four patterns. */
+  const pats = {}, patNotes = {};
+  scalePatterns('C').forEach(p => {
+    pats[p.name] = p.steps.join(' ');
+    patNotes[p.name] = p.notes.join(' ');
+  });
+  const ebMaj = scaleSteps('Eb', MAJOR_SCALE);
+  const stepOk = pats['major']          === 'T T ½ T T T ½' &&
+                 pats['natural minor']  === 'T ½ T T ½ T T' &&
+                 pats['harmonic minor'] === 'T ½ T T ½ 1½ ½' &&
+                 pats['melodic minor']  === 'T ½ T T T T ½' &&
+                 ebMaj.notes.join(' ') === 'Eb F G Ab Bb C D Eb' &&
+                 ebMaj.steps.length === 7 &&
+                 /* Every pattern spelled from the same tonic, one letter per
+                    degree: the harmonic minor keeps Ab and raises to B, it does
+                    not become G#. */
+                 patNotes['major']          === 'C D E F G A B' &&
+                 patNotes['natural minor']  === 'C D Eb F G Ab Bb' &&
+                 patNotes['harmonic minor'] === 'C D Eb F G Ab B' &&
+                 patNotes['melodic minor']  === 'C D Eb F G A B';
+  if (stepOk) pass++;
+  lines.push((stepOk ? 'pass' : 'FAIL') + '  scale step patterns');
+
   /* The signature belongs to the relative major, not the letter of the tonic. */
   const sigOk = keySignature(3, 'minor').text === '6 flats' &&
                 keySignature(10, 'major').notes.join(' ') === 'Bb Eb' &&
@@ -1320,15 +1406,16 @@ function selfTest(report) {
   if (sigOk) pass++;
   lines.push((sigOk ? 'pass' : 'FAIL') + '  key signatures');
 
-  report(lines, pass, cases.length + 8);
-  return pass === cases.length + 8;
+  report(lines, pass, cases.length + 9);
+  return pass === cases.length + 9;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { analyze, keyName, shortKeyName, selfTest, parseChord, chordNoteNames, transposeChord,
                      spellScale, keySignature, diatonicChords, harmonicFunctions,
                      circleOfFifths, describe, modesOfKey, MODE_BRIGHTNESS,
-                     cadences, modalReading, inversionOf, chordFigure };
+                     cadences, modalReading, inversionOf, chordFigure,
+                     scaleSteps, scalePatterns };
 }
 </script>
 
@@ -1569,6 +1656,23 @@ if (typeof module !== 'undefined' && module.exports) {
         '<span class="sev">' + esc(d.name7) + '</span>' +
       '</div>').join('');
 
+    /* The key's own scale, then the four patterns behind it. The current one is
+       marked, so the concrete row above and the abstract row below are visibly
+       the same thing. */
+    const keyRoot = (t.mode === 'major' ? MAJOR_KEY_NAMES : MINOR_KEY_NAMES)[t.tonic];
+    const sc = scaleSteps(keyRoot, t.mode === 'major' ? MAJOR_SCALE : NAT_MINOR);
+    const stepRow = sc.notes.map((nm, i) =>
+      '<span class="n">' + esc(nm) + '</span>' +
+      (i < sc.steps.length ? '<span class="s">' + esc(sc.steps[i]) + '</span>' : '')).join('');
+    const ownPattern = t.mode === 'major' ? 'major' : 'natural minor';
+    const patterns = scalePatterns(keyRoot).map(p =>
+      '<tr' + (p.name === ownPattern ? ' class="own"' : '') + '>' +
+        '<td>' + esc(p.name) + '</td>' +
+        '<td class="pat">' +
+          p.steps.map(s => '<span>' + esc(s) + '</span>').join('') + '</td>' +
+        '<td class="sym">' + esc(p.notes.join(' ')) + '</td>' +
+      '</tr>').join('');
+
     const cads = r.cadences.map(c =>
       '<li><span class="move">' + esc(c.from) + ' → ' + esc(c.to) + '</span>' +
         ' — <span class="kind">' + esc(c.name) + '</span>' +
@@ -1655,6 +1759,16 @@ if (typeof module !== 'undefined' && module.exports) {
             ? '<p class="legend">The dashed pair raise the seventh degree. They come from the ' +
               'harmonic minor, and they are how a minor key gets a true dominant — and the ' +
               'only place a full diminished seventh belongs.</p>'
+            : '') +
+          '<h2>Scale steps</h2>' +
+          '<div class="steps">' + stepRow + '</div>' +
+          '<div class="tablewrap"><table class="patterns">' +
+            '<tbody>' + patterns + '</tbody>' +
+          '</table></div>' +
+          (t.mode === 'minor'
+            ? '<p class="legend">The harmonic minor\'s 1½ is an augmented second, the ' +
+              'outsized gap between its flat sixth and raised seventh. That step is the ' +
+              'sound of the mode.</p>'
             : '') +
           '<h2>Harmonic function</h2>' +
           '<div class="tablewrap"><table>' +

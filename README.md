@@ -52,6 +52,10 @@ The answer updates as you type.
   diminished triad the diatonic seventh is half diminished (`Bm7b5`, the `viiø7`
   of C major); a full diminished seventh belongs only on a minor key's raised
   seventh.
+- **Scale steps** — the key's own scale written as the gaps between its notes,
+  `C T D T E ½ F …`, over a comparison of the four patterns spelled from that
+  same tonic: major, natural, harmonic and melodic minor. The harmonic minor's
+  `1½` is the augmented second between its flat sixth and raised seventh.
 - **Modes** built on each degree, each with the one degree that gives it its
   colour, ordered darkest to brightest.
 
@@ -105,13 +109,14 @@ ambiguous. The app says so rather than manufacturing confidence.
 ## Development
 
 The music theory lives in a pure module — `parseChord`, `scoreKey`, `analyze`,
-`diatonicChords`, `cadences`, `modalReading`, `modesOfKey` and friends — with no
-DOM access. The UI layer only calls `analyze()` and renders the result.
+`diatonicChords`, `cadences`, `modalReading`, `scaleSteps`, `modesOfKey` and
+friends — with no DOM access. The UI layer only calls `analyze()` and renders
+the result.
 
 A self-test runs on page load and reports to the console:
 
 ```
-Fifthtonic self-test — 25/25
+Fifthtonic self-test — 26/26
 ```
 
 To run the same tests headlessly:
