@@ -29,9 +29,10 @@ The answer updates as you type.
 - **Possible keys** — the runners-up, as a row of buttons. Click one and the
   whole page is re-read against it; the detected key stays tagged so you can
   get back.
-- **Circle of fifths**, with the key's six chords shaded, their scale degrees
-  marked, the diminished degree at its root note, and the parallel key outlined
-  in dashes.
+- **Circle of fifths** in three rings — major keys, their relative minors, and
+  the diminished chord the two share (the major's vii°, the minor's ii°). The
+  key's seven chords are shaded, their scale degrees marked, and the parallel key
+  outlined in dashes.
 - **How each chord functions** — a Roman-numeral analysis of what you typed,
   including secondary dominants (`D7` in C major reads `V7/V`) and borrowed
   chords.
@@ -95,7 +96,7 @@ only calls `analyze()` and renders the result.
 A self-test runs on page load and reports to the console:
 
 ```
-Fifthtonic self-test — 18/18
+Fifthtonic self-test — 19/19
 ```
 
 To run the same tests headlessly:

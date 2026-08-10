@@ -238,7 +238,9 @@ h1 {
 .dc.extra { border-style: dashed; }
 
 /* ---- circle of fifths */
-.cof { display: block; width: 100%; max-width: 340px; height: auto; margin: .4rem auto 0; }
+/* Drawn at 380 and capped there: three rings of type do not survive being
+   scaled down, and the innermost is the smallest to begin with. */
+.cof { display: block; width: 100%; max-width: 380px; height: auto; margin: .4rem auto 0; }
 .cof .ring, .cof .spoke { fill: none; stroke: var(--hairline); stroke-width: 1; }
 .cof text {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -248,6 +250,9 @@ h1 {
 }
 .cof .maj { font-size: 15px; }
 .cof .min { font-size: 11px; }
+/* Innermost and smallest: the diminished ring is a detail of the two rings
+   outside it, never the thing you read first. */
+.cof .dim { font-size: 10px; }
 .cof .in  { fill: var(--fg); }
 /* The shaded arc is the key's whole chord supply. */
 .cof .region { fill: var(--accent); opacity: .13; stroke: none; }
@@ -298,6 +303,17 @@ tr.tonic td.sym { color: var(--accent); font-weight: 700; }
 .bright li.own { border-color: var(--accent); color: var(--accent); font-weight: 700; }
 .legend { font-size: .85rem; color: var(--muted); margin: .6rem 0 0; }
 ul.legend { list-style: none; padding: 0; }
+/* The wheel is the point; its key is for the first read only, so it starts
+   folded away. */
+.fold > summary {
+  font-size: .85rem;
+  color: var(--muted);
+  cursor: pointer;
+  padding: .5rem 0;
+}
+.fold > summary:hover { color: var(--fg); }
+.fold > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fold ul.legend { margin-top: 0; }
 ul.legend li { position: relative; padding-left: .95rem; margin-top: .3rem; }
 ul.legend li::before { content: "—"; position: absolute; left: 0; opacity: .6; }
 ul.legend b { color: var(--fg); font-weight: 600; }
@@ -825,14 +841,27 @@ function harmonicFunctions(tonic, mode) {
 const ENHARMONIC_MAJOR = { 11: 'Cb', 6: 'Gb', 1: 'C#' };
 const ENHARMONIC_MINOR = { 8: 'Abm', 3: 'D#m', 10: 'A#m' };
 
+/* The third name on a spoke: the diminished triad on the leading tone. It is the
+   major key's vii° and, read from the ring above it, the relative minor's ii° —
+   one chord serving both, which is why it belongs on their shared spoke rather
+   than on a spoke of its own. Spelled from the parent scale, so C# major gives
+   B#° and Db major gives C°. */
+function seventhDegreeDim(majorName) {
+  return spellScale(majorName, MAJOR_SCALE)[6] + '°';
+}
+
 function circleOfFifths() {
   const spokes = [];
   for (let i = 0; i < 12; i++) {
     const pc = mod12(i * 7), rel = mod12(pc + 9);
+    const majAlt = ENHARMONIC_MAJOR[pc] || null;
     spokes.push({
       angle: i * 30,
-      majorPc: pc,  major: MAJOR_KEY_NAMES[pc],         majorAlt: ENHARMONIC_MAJOR[pc] || null,
-      minorPc: rel, minor: MINOR_KEY_NAMES[rel] + 'm',  minorAlt: ENHARMONIC_MINOR[rel] || null
+      majorPc: pc,  major: MAJOR_KEY_NAMES[pc],         majorAlt: majAlt,
+      minorPc: rel, minor: MINOR_KEY_NAMES[rel] + 'm',  minorAlt: ENHARMONIC_MINOR[rel] || null,
+      dimPc: mod12(pc + 11),
+      dim: seventhDegreeDim(MAJOR_KEY_NAMES[pc]),
+      dimAlt: majAlt ? seventhDegreeDim(majAlt) : null
     });
   }
   return spokes;
@@ -1021,11 +1050,23 @@ function selfTest(report) {
   /* Parser must survive garbage without taking the whole analysis down. */
   const junk = analyze('C Hm7 G');
   const junkOk = junk.ok && junk.parsed.some(p => p.error) && junk.chords.length === 2;
-  if (junkOk) pass++; else lines.push('FAIL  bad-token recovery');
+  if (junkOk) pass++;
   lines.push((junkOk ? 'pass' : 'FAIL') + '  bad-token recovery');
 
-  report(lines, pass, cases.length + 1);
-  return pass === cases.length + 1;
+  /* Every spoke's inner name must be the diminished chord the major above it and
+     the minor beside it both own — its root a semitone under the major's. */
+  const spokes = circleOfFifths();
+  const ringOk = spokes.every(sp => {
+    const vii = diatonicChords(sp.majorPc, 'major')[6];
+    const ii  = diatonicChords(sp.minorPc, 'minor')[1];
+    return sp.dimPc === vii.rootPc && sp.dimPc === ii.rootPc &&
+           sp.dim === vii.name.replace('dim', '°');
+  });
+  if (ringOk) pass++;
+  lines.push((ringOk ? 'pass' : 'FAIL') + '  diminished ring is vii° / ii°');
+
+  report(lines, pass, cases.length + 2);
+  return pass === cases.length + 2;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -1081,7 +1122,10 @@ if (typeof module !== 'undefined' && module.exports) {
   }
 
   /* Polar layout: spoke 0 (C) points straight up, then clockwise by fifths.
-     Radii, outside in: rim 182, the divide between majors and minors 128, hub 70. */
+     Three bands, outside in: majors 134–182, relative minors 92–134, the
+     diminished sevenths 34–92. The innermost band is the widest because at that
+     radius a degree numeral laid along a horizontal spoke is nearly as long as
+     the band is deep. */
   const DEGREES = {
     major: { outer: ['IV', 'I', 'V'],    inner: ['ii', 'vi', 'iii'] },
     minor: { outer: ['VI', 'III', 'VII'], inner: ['iv', 'i', 'v'] }
@@ -1089,9 +1133,10 @@ if (typeof module !== 'undefined' && module.exports) {
 
   function circleSvg(t) {
     const CX = 190, CY = 190;
-    const R_RIM = 182, R_DIV = 128, R_HUB = 70;
-    const R_MAJ = 160, R_MAJ_DEG = 136;
-    const R_MIN = 100, R_MIN_DEG = 76;
+    const R_RIM = 182, R_DIV1 = 134, R_DIV2 = 92, R_HUB = 34;
+    const R_MAJ = 164, R_MAJ_DEG = 140;
+    const R_MIN = 117, R_MIN_DEG = 97;
+    const R_DIM = 77,  R_DIM_DEG = 53;
 
     const at = (deg, rad) => {
       const a = (deg - 90) * Math.PI / 180;
@@ -1111,13 +1156,19 @@ if (typeof module !== 'undefined' && module.exports) {
         '</text>';
     };
 
-    const arc = (deg0, deg1, rIn, rOut) => {
-      const [ax, ay] = at(deg0, rOut), [bx, by] = at(deg1, rOut);
-      const [cx, cy] = at(deg1, rIn),  [dx, dy] = at(deg0, rIn);
-      return 'M' + n(ax) + ' ' + n(ay) +
-             'A' + rOut + ' ' + rOut + ' 0 0 1 ' + n(bx) + ' ' + n(by) +
-             'L' + n(cx) + ' ' + n(cy) +
-             'A' + rIn + ' ' + rIn + ' 0 0 0 ' + n(dx) + ' ' + n(dy) + 'Z';
+    /* A key's chords are not a plain sector. Three spokes wide across the major
+       and minor rings, but only one spoke deep into the diminished ring: the two
+       diminished chords flanking the vii° share those spokes without being in the
+       scale, so the shape steps in around them. */
+    const wedge = (centerDeg) => {
+      const a = [centerDeg - 45, centerDeg - 15, centerDeg + 15, centerDeg + 45];
+      const pt = (i, rad) => { const [x, y] = at(a[i], rad); return n(x) + ' ' + n(y); };
+      const A = (rad, sweep, i) => 'A' + rad + ' ' + rad + ' 0 0 ' + sweep + ' ' + pt(i, rad);
+      return 'M' + pt(0, R_RIM) +
+             A(R_RIM, 1, 3) +                        // round the rim, clockwise
+             'L' + pt(3, R_DIV2) + A(R_DIV2, 0, 2) + // back along the minors' inner edge
+             'L' + pt(2, R_HUB)  + A(R_HUB,  0, 1) + // the one-spoke tab for the vii°
+             'L' + pt(1, R_DIV2) + A(R_DIV2, 0, 0) + 'Z';
     };
 
     const spokes = circleOfFifths();
@@ -1128,9 +1179,6 @@ if (typeof module !== 'undefined' && module.exports) {
       t.mode === 'major' ? sp.majorPc === t.tonic : sp.minorPc === t.tonic);
     const degs = DEGREES[t.mode];
 
-    /* A diminished chord has no key, so it gets no spoke of its own — but its
-       root is still a note on the wheel. Mark it there, dashed, to say "this
-       degree lives here without the wheel being about it". */
     /* Parallel key: same tonic, opposite mode — C major and C minor. It sits
        three spokes away, which is exactly why swapping to it changes the key
        signature by three accidentals. */
@@ -1138,31 +1186,29 @@ if (typeof module !== 'undefined' && module.exports) {
       t.mode === 'major' ? sp.minorPc === t.tonic : sp.majorPc === t.tonic);
     const parDegs = DEGREES[t.mode === 'major' ? 'minor' : 'major'];
 
-    const dimAt = new Map();
-    diatonicChords(t.tonic, t.mode)
-      .filter(d => /dim/.test(d.name))
-      .forEach(d => {
-        const i = spokes.findIndex(sp => sp.majorPc === d.rootPc);
-        /* The vii keeps its degree sign — it is the one the ear is listening for. */
-        if (i >= 0) dimAt.set(i, /vii/.test(d.roman) ? d.roman : d.roman.replace('°', ''));
-      });
+    /* Which spokes' diminished chords the key actually uses. In a major key that
+       is the one vii° on the tonic spoke; in a minor key it is ii° on the tonic
+       spoke plus the raised vii°, which lands on the parallel major's spoke —
+       another way of seeing that the raised seventh is borrowed. */
+    const dimRoman = (tonic, mode) => {
+      const m = new Map();
+      diatonicChords(tonic, mode)
+        .filter(d => /dim/.test(d.name))
+        .forEach(d => {
+          const i = spokes.findIndex(sp => sp.dimPc === d.rootPc);
+          if (i >= 0) m.set(i, d.roman);
+        });
+      return m;
+    };
+    const dimAt = dimRoman(t.tonic, t.mode);
+    const dimPar = dimRoman(t.tonic, t.mode === 'major' ? 'minor' : 'major');
 
-    /* Shaded like the wedge, but only across the outer band: the note is in the
-       key, the relative minor sharing its spoke is not. */
-    let dimRegions = '';
-    dimAt.forEach((roman, i) => {
-      dimRegions += '<path class="region" d="' +
-                    arc(i * 30 - 15, i * 30 + 15, R_DIV, R_RIM) + '"/>';
-    });
-
-    let g = '<path class="region" d="' +
-              arc(home * 30 - 45, home * 30 + 45, R_HUB, R_RIM) + '"/>' +
-            dimRegions +
+    let g = '<path class="region" d="' + wedge(home * 30) + '"/>' +
             '<circle class="ring" cx="' + CX + '" cy="' + CY + '" r="' + R_RIM + '"/>' +
-            '<circle class="ring" cx="' + CX + '" cy="' + CY + '" r="' + R_DIV + '"/>' +
+            '<circle class="ring" cx="' + CX + '" cy="' + CY + '" r="' + R_DIV1 + '"/>' +
+            '<circle class="ring" cx="' + CX + '" cy="' + CY + '" r="' + R_DIV2 + '"/>' +
             '<circle class="ring" cx="' + CX + '" cy="' + CY + '" r="' + R_HUB + '"/>' +
-            '<path class="region-outline" d="' +
-              arc(parallel * 30 - 45, parallel * 30 + 45, R_HUB, R_RIM) + '"/>';
+            '<path class="region-outline" d="' + wedge(parallel * 30) + '"/>';
 
     for (let i = 0; i < 12; i++) {
       const [x1, y1] = at(i * 30 + 15, R_HUB), [x2, y2] = at(i * 30 + 15, R_RIM);
@@ -1173,6 +1219,7 @@ if (typeof module !== 'undefined' && module.exports) {
     spokes.forEach((sp, i) => {
       const [mx, my] = at(sp.angle, R_MAJ);
       const [ix, iy] = at(sp.angle, R_MIN);
+      const [dmx, dmy] = at(sp.angle, R_DIM);
       const majOn = t.mode === 'major' && i === home;
       const minOn = t.mode === 'minor' && i === home;
 
@@ -1194,14 +1241,19 @@ if (typeof module !== 'undefined' && module.exports) {
              '" r="' + rad + '"/>';
       }
 
-      if (dimAt.has(i)) {
-        const [px, py] = at(sp.angle, R_MAJ_DEG);
-        g += '<text class="deg" x="' + n(px) + '" y="' + n(py) + '">' +
-             esc(dimAt.get(i)) + '</text>';
-      }
-
-      g += label('maj', mx, my, sp.major, sp.majorAlt, majOn, lit || dimAt.has(i));
+      g += label('maj', mx, my, sp.major, sp.majorAlt, majOn, lit);
       g += label('min', ix, iy, sp.minor, sp.minorAlt, minOn, lit);
+      g += label('dim', dmx, dmy, sp.dim, sp.dimAlt, false, dimAt.has(i));
+
+      /* The diminished degree, on the ring it belongs to. Only the spokes whose
+         diminished chord the key really contains are numbered — the other two in
+         the wedge share the spoke without sharing the chord. */
+      if (dimAt.has(i) || dimPar.has(i)) {
+        const own = dimAt.has(i);
+        const [px, py] = at(sp.angle, R_DIM_DEG);
+        g += '<text class="deg' + (own ? '' : ' par') + '" x="' + n(px) + '" y="' + n(py) + '">' +
+             esc(own ? dimAt.get(i) : dimPar.get(i)) + '</text>';
+      }
 
       if (lit) {
         const [dx, dy] = at(sp.angle, R_MAJ_DEG);
@@ -1226,8 +1278,9 @@ if (typeof module !== 'undefined' && module.exports) {
       }
     });
 
-    return '<svg class="cof" viewBox="0 0 380 380" role="img" aria-label="Circle of fifths, ' +
-           esc(keyName(t.tonic, t.mode)) + ' and its six diatonic chords highlighted ' +
+    return '<svg class="cof" viewBox="0 0 380 380" role="img" aria-label="Circle of fifths in ' +
+           'three rings — major keys, relative minors, diminished sevenths. ' +
+           esc(keyName(t.tonic, t.mode)) + ' and its diatonic chords are highlighted ' +
            'with their scale degrees">' + g + '</svg>';
   }
 
@@ -1300,13 +1353,17 @@ if (typeof module !== 'undefined' && module.exports) {
         '<div class="details">' +
           '<h2>Circle of fifths</h2>' +
           circleSvg(t) +
-          '<ul class="legend">' +
-            '<li><b>Shaded wedge</b> — the six chords in the key.</li>' +
-            '<li><b>One step round</b> — subdominant anticlockwise, dominant clockwise.</li>' +
-            '<li><b>Inner ring</b> — each major\'s relative minor.</li>' +
-            '<li><b>Outer band only</b> — a diminished degree, at its root note.</li>' +
-            '<li><b>Dashed wedge</b> — the parallel key and its degrees, to borrow from.</li>' +
-          '</ul>' +
+          '<details class="fold">' +
+            '<summary>Summary</summary>' +
+            '<ul class="legend">' +
+              '<li><b>Shaded wedge</b> — the seven chords in the key.</li>' +
+              '<li><b>One step round</b> — subdominant anticlockwise, dominant clockwise.</li>' +
+              '<li><b>Middle ring</b> — each major\'s relative minor.</li>' +
+              '<li><b>Inner ring</b> — the diminished chord both share: the major\'s ' +
+                'vii°, the minor\'s ii°.</li>' +
+              '<li><b>Dashed wedge</b> — the parallel key and its degrees, to borrow from.</li>' +
+            '</ul>' +
+          '</details>' +
           '<h2>How each chord functions</h2>' +
           '<div class="tablewrap"><table>' +
             '<thead><tr><th>Chord</th><th>Function</th><th>Origin</th></tr></thead>' +
