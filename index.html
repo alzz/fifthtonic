@@ -305,9 +305,15 @@ h1 {
 /* The ring around the tonic carries the same information as the colour, so the
    highlight survives a monochrome print or a colour-blind reader. */
 .cof .mark { fill: none; stroke: var(--accent); stroke-width: 1.5; }
-/* The parallel key is a landmark, not part of the answer — a plain outline,
-   no accent, so it never competes with the tonic. */
-.cof .mark.parallel { stroke: var(--fg); stroke-width: 1; opacity: .5; }
+/* The parallel key is a landmark, not part of the answer — no accent, so it
+   never competes with the tonic, and dashed on the same 4 4 as the wedge it sits
+   inside, so a dashed line means one thing everywhere on the wheel. */
+.cof .mark.parallel {
+  stroke: var(--fg);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  opacity: .5;
+}
 
 .tablewrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: .9rem; }
