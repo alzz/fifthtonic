@@ -2,7 +2,7 @@
 
 Type a chord progression, find out what key it is in.
 
-**[alzz.github.io/fifthtonic](https://alzz.github.io/fifthtonic/)**
+**Live page → [alzz.github.io/fifthtonic](https://alzz.github.io/fifthtonic/)**
 
 A single self-contained HTML page. No build step, no dependencies, no network
 requests — open `index.html` in a browser and it works.
